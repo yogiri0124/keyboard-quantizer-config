@@ -1,0 +1,78 @@
+name: Build firmware
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build keyboard quantizer mini (vial)
+    runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli
+
+    steps:
+      - name: Checkout this config
+        uses: actions/checkout@v5
+        with:
+          path: config
+          persist-credentials: false
+
+      - name: Read upstream settings
+        run: cat config/upstream.env >> "$GITHUB_ENV"
+
+      - name: Checkout upstream QMK tree
+        run: |
+          git init qmk
+          cd qmk
+          git remote add origin "$UPSTREAM_REPO"
+          if ! git fetch --depth 1 origin "$UPSTREAM_REF"; then
+            echo "Pinned commit not fetchable directly; falling back to the branch tip."
+            git fetch --depth 50 origin "$UPSTREAM_BRANCH"
+          fi
+          git checkout --detach "$UPSTREAM_REF"
+          git log --oneline -1
+
+      - name: Checkout upstream submodules
+        working-directory: qmk
+        run: |
+          git submodule update --init --recursive --depth 1 \
+            lib/chibios lib/chibios-contrib lib/pico-sdk lib/printf
+
+      - name: Overlay quantizer sources
+        run: |
+          cd config
+          # Everything except this repo's own metadata is a QMK path.
+          for path in keyboards util; do
+            [ -d "$path" ] && cp -a "$path" ../qmk/
+          done
+          cd ../qmk
+          git status --short
+
+      - name: Install python dependencies
+        working-directory: qmk
+        run: |
+          QMK_PYTHON=/opt/uv/tools/qmk/bin/python3
+          [ -x "$QMK_PYTHON" ] || QMK_PYTHON=$(command -v python3)
+          "$QMK_PYTHON" -m pip install -r requirements.txt
+
+      - name: Build
+        working-directory: qmk
+        run: |
+          git config --global --add safe.directory "$(pwd)"
+          make "${KEYBOARD}:${KEYMAP}"
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyboard_quantizer_mini_vial
+          path: qmk/.build/*.uf2
+          if-no-files-found: error
