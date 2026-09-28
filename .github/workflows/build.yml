@@ -76,5 +76,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: keyboard_quantizer_mini_vial
-          path: qmk/.build/*.uf2
+          # .build is hidden, and upload-artifact skips hidden paths; QMK also
+          # copies the .uf2 next to the makefile, so take it from there.
+          path: qmk/*.uf2
           if-no-files-found: error
