@@ -357,7 +357,10 @@ def check(name, data, max_report_bytes):
                     local[k] = resolve(local[k])
             pages = [p for p, _ in local["usages"]]
             pages += [local[k][0] for k in ("umin", "umax") if local[k] is not None]
-            if is_data and (not pages or None in pages) and glob["page"] is None:
+            if is_data and not local["usages"] and local["umin"] is None:
+                # Hosts treat a data field without a usage as padding.
+                err(f"{item} (Data) without a Usage")
+            elif is_data and None in pages and glob["page"] is None:
                 err(f"{item} without a Usage Page")
             if (local["umin"] is None) != (local["umax"] is None):
                 err(f"{item}: Usage Minimum and Usage Maximum must come as a pair")
