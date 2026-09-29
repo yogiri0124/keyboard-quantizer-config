@@ -331,18 +331,20 @@ void dynamic_keymap_macro_send(uint8_t id) {
                     }
                 }
             } else if (data[1] == SS_DELAY_CODE) {
-                // Check delay code type is VIA(0xC) or not
-                bool is_via = true;
+                // Check delay code type is VIA(0xC) or not: VIA stores 1-5
+                // ASCII digits and a '|'. Only a found '|' makes it VIA, so
+                // five digits without one fall back to the Vial encoding.
+                bool is_via = false;
                 int  ms     = 0;
-                for (int idx = 0; idx < 5; idx++) {
+                for (int idx = 0; idx <= 5; idx++) {
                     uint8_t c = eeprom_read_byte(p + idx);
-                    if (c >= '0' && c <= '9') {
+                    if (idx < 5 && c >= '0' && c <= '9') {
                         ms = ms * 10 + c - '0';
-                    } else if (c == '|' && idx != 0) {
-                        p += idx + 1;
-                        break;
                     } else {
-                        is_via = false;
+                        if (c == '|' && idx != 0) {
+                            is_via = true;
+                            p += idx + 1;
+                        }
                         break;
                     }
                 }

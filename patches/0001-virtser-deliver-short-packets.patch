@@ -1,8 +1,8 @@
 diff --git a/tmk_core/protocol/chibios/usb_main.c b/tmk_core/protocol/chibios/usb_main.c
-index 2024a3b..7ed725e 100644
+index 2024a3b..4de994c 100644
 --- a/tmk_core/protocol/chibios/usb_main.c
 +++ b/tmk_core/protocol/chibios/usb_main.c
-@@ -605,9 +605,14 @@ __attribute__((weak)) void virtser_recv(uint8_t c) {
+@@ -605,9 +605,23 @@ __attribute__((weak)) void virtser_recv(uint8_t c) {
  }
  
  void virtser_task(void) {
@@ -14,8 +14,17 @@ index 2024a3b..7ed725e 100644
 +     * Hand over exactly the bytes that arrived instead. */
 +    usb_endpoint_out_t *endpoint = &usb_endpoints_out[USB_ENDPOINT_OUT_CDC_DATA];
 +    uint8_t             buffer[CDC_EPSIZE];
-+    size_t              received;
-+    while (usbGetDriverStateI(endpoint->config.usbp) == USB_ACTIVE && (received = ibqReadTimeout(&endpoint->ibqueue, buffer, sizeof(buffer), TIME_IMMEDIATE)) > 0) {
++    while (true) {
++        osalSysLock();
++        bool active = usbGetDriverStateI(endpoint->config.usbp) == USB_ACTIVE;
++        osalSysUnlock();
++        if (!active) {
++            break;
++        }
++        size_t received = ibqReadTimeout(&endpoint->ibqueue, buffer, sizeof(buffer), TIME_IMMEDIATE);
++        if (received == 0) {
++            break;
++        }
 +        for (size_t i = 0; i < received; i++) {
              virtser_recv(buffer[i]);
          }
