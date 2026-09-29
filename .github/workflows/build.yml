@@ -70,13 +70,16 @@ jobs:
         working-directory: qmk
         run: |
           git config --global --add safe.directory "$(pwd)"
-          make "${KEYBOARD}:${KEYMAP}"
+          # The qmk_cli image sets QMK_USERSPACE, which makes QMK try to copy
+          # the firmware into a userspace folder that does not exist here.
+          env -u QMK_USERSPACE make "${KEYBOARD}:${KEYMAP}"
+          ls -l .build/*.uf2
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
           name: keyboard_quantizer_mini_vial
-          # .build is hidden, and upload-artifact skips hidden paths; QMK also
-          # copies the .uf2 next to the makefile, so take it from there.
-          path: qmk/*.uf2
+          # .build is a hidden folder, which upload-artifact skips by default.
+          path: qmk/.build/*.uf2
+          include-hidden-files: true
           if-no-files-found: error
