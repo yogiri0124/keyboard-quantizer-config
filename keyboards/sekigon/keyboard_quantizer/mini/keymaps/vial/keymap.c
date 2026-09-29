@@ -159,6 +159,8 @@ void housekeeping_task_user(void) {
     cli_exec();
 }
 
+#include <string.h>
+
 #include "vial.h"
 #include "dynamic_keymap.h"
 #include "send_string.h"
@@ -288,8 +290,10 @@ void dynamic_keymap_macro_send(uint8_t id) {
     // We already checked there was a null at the end of
     // the buffer, so this cannot go past the end
     while (1) {
+        // Clear every pass: an extended tap leaves data[2..3] set, and the
+        // next 1- or 3-char send_string() would then run off the end.
+        memset(data, 0, sizeof(data));
         data[0] = eeprom_read_byte(p++);
-        data[1] = 0;
         // Stop at the null terminator of this macro string
         if (data[0] == 0) {
             break;
