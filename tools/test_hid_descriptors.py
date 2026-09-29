@@ -38,6 +38,7 @@ CASES = [
     ("Usage Minimum without Maximum", H("05 01 09 02 a1 01 05 09 19 01 15 00 25 01 95 08 75 01 81 02 c0"), True),
     ("extended Usage Min/Max on different pages", H("05 01 09 02 a1 01 1b 01 00 09 00 2b 08 00 07 00 15 00 25 01 95 08 75 01 81 02 c0"), True),
     ("Report ID tag with only an ID-less report", H("05 01 09 02 a1 01 05 09 19 01 29 08 15 00 25 01 95 08 75 01 81 02 85 02 c0"), True),
+    ("top-level collection without a Usage", H("05 01 a1 01 05 09 19 01 29 08 15 00 25 01 95 08 75 01 81 02 c0"), True),
     ("top-level Physical collection", H("05 01 09 02 a1 00 05 09 19 01 29 08 15 00 25 01 95 08 75 01 81 02 c0"), True),
     ("Report Count 0", H("05 01 09 02 a1 01 05 09 19 01 29 08 15 00 25 01 95 00 75 01 81 02 c0"), True),
     ("Delimiter left open", H("05 01 09 02 a1 01 a9 01 05 09 19 01 29 08 15 00 25 01 95 08 75 01 81 02 c0"), True),

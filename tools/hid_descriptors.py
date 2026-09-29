@@ -316,6 +316,11 @@ def check(name, data, max_report_bytes):
                     top += 1
                     if value != 1:
                         err("top-level Collection is not an Application collection")
+                    # The host tells a mouse from a keyboard by this usage.
+                    if not local["usages"]:
+                        err("top-level Collection has no Usage")
+                    elif local["usages"][-1][0] is None and glob["page"] is None:
+                        err("top-level Collection Usage has no Usage Page")
                 text = f"{item} ({COLLECTIONS.get(value, f'0x{value:02X}')})"
                 lines.append(indent + text)
                 depth += 1
