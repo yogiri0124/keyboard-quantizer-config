@@ -17,4 +17,5 @@ CFLAGS += -DGIT_DESCRIBE=$(GIT_DESCRIBE)
 
 # Override raw_hid_receive to support both of VIA and VIAL
 $(BUILD_DIR)/obj_sekigon_keyboard_quantizer_mini_vial/quantum/via.o:: CFLAGS += -Draw_hid_receive=raw_hid_receive_vial
+$(BUILD_DIR)/obj_sekigon_keyboard_quantizer_mini_vial/quantum/dynamic_keymap.o:: CFLAGS += -Ddynamic_keymap_macro_send=dynamic_keymap_macro_send_vial
 SRC += tmk_core/protocol/bmp/via_qmk.c
