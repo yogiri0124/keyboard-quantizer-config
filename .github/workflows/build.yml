@@ -92,11 +92,30 @@ jobs:
           env -u QMK_USERSPACE make "${KEYBOARD}:${KEYMAP}" GIT_DESCRIBE="$FW_VERSION"
           ls -l .build/*.uf2
 
+      - name: Check HID descriptors
+        # Fails the build on a malformed report descriptor, before anything
+        # reaches the device. The decoded dump also goes to the job summary.
+        working-directory: qmk
+        run: |
+          status=0
+          python3 ../config/tools/hid_descriptors.py .build/*.elf --max-report-bytes 32 > hid.txt 2>&1 || status=$?
+          cat hid.txt
+          { echo '### HID report descriptors'; echo '```'; cat hid.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
           name: keyboard_quantizer_mini_vial
           # .build is a hidden folder, which upload-artifact skips by default.
           path: qmk/.build/*.uf2
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Upload ELF (for debugging)
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyboard_quantizer_mini_vial_elf
+          path: qmk/.build/*.elf
           include-hidden-files: true
           if-no-files-found: error

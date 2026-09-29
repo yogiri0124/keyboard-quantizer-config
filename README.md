@@ -20,6 +20,7 @@ GitHub Actions が本家 [sekigon-gonnoc/vial-qmk](https://github.com/sekigon-go
 | `keyboards/sekigon/keyboard_quantizer/parser/` | 接続したデバイスの HID レポート解析 |
 | `util/vial_generate_definition.py` | Vial 定義の生成 |
 | `patches/` | QMK 本体への小さな修正（`git apply` する差分） |
+| `tools/hid_descriptors.py` | ビルドした `.elf` の HID 記述子を検証・表示（CI が実行） |
 | `upstream.env` | 土台にする本家のコミットと、ビルド対象 |
 
 ここにあるのは本家と異なるファイルだけ。それ以外は本家のものがそのまま使われる。
