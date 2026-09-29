@@ -18,6 +18,9 @@ jobs:
     name: Build keyboard quantizer mini (vial)
     runs-on: ubuntu-latest
     container: ghcr.io/qmk/qmk_cli
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout this config
@@ -36,12 +39,12 @@ jobs:
           git init qmk
           cd qmk
           git remote add origin "$UPSTREAM_REPO"
-          if ! git fetch --depth 1 origin "$UPSTREAM_REF"; then
-            echo "Pinned commit not fetchable directly; falling back to the branch tip."
-            git fetch --depth 50 origin "$UPSTREAM_BRANCH"
-          fi
+          # Treeless: full history and tags (for `git describe`) without
+          # downloading old trees. Checkout fetches the files it needs.
+          git fetch --filter=tree:0 --tags origin "$UPSTREAM_BRANCH"
           git checkout --detach "$UPSTREAM_REF"
           git log --oneline -1
+          git describe --tags --long
 
       - name: Checkout upstream submodules
         working-directory: qmk
@@ -59,6 +62,17 @@ jobs:
           cd ../qmk
           git status --short
 
+      - name: Apply core patches
+        # Small fixes to QMK core, kept as diffs so an upstream change to the
+        # same lines makes the build fail here instead of silently reverting it.
+        working-directory: qmk
+        run: |
+          for p in ../config/patches/*.patch; do
+            [ -e "$p" ] || continue
+            echo "Applying $p"
+            git apply --verbose "$p"
+          done
+
       - name: Install python dependencies
         working-directory: qmk
         run: |
@@ -70,9 +84,12 @@ jobs:
         working-directory: qmk
         run: |
           git config --global --add safe.directory "$(pwd)"
+          # Shown by the CLI `version` command: upstream describe + this repo.
+          FW_VERSION="$(git describe --tags --long)-cfg-${GITHUB_SHA::7}"
+          echo "Firmware version: $FW_VERSION"
           # The qmk_cli image sets QMK_USERSPACE, which makes QMK try to copy
           # the firmware into a userspace folder that does not exist here.
-          env -u QMK_USERSPACE make "${KEYBOARD}:${KEYMAP}"
+          env -u QMK_USERSPACE make "${KEYBOARD}:${KEYMAP}" GIT_DESCRIBE="$FW_VERSION"
           ls -l .build/*.uf2
 
       - name: Upload firmware

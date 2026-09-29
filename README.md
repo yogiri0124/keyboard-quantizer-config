@@ -19,9 +19,12 @@ GitHub Actions が本家 [sekigon-gonnoc/vial-qmk](https://github.com/sekigon-go
 | `keyboards/sekigon/keyboard_quantizer/mini/matrix.c`, `info.json` | 基板側の処理と定義 |
 | `keyboards/sekigon/keyboard_quantizer/parser/` | 接続したデバイスの HID レポート解析 |
 | `util/vial_generate_definition.py` | Vial 定義の生成 |
+| `patches/` | QMK 本体への小さな修正（`git apply` する差分） |
 | `upstream.env` | 土台にする本家のコミットと、ビルド対象 |
 
 ここにあるのは本家と異なるファイルだけ。それ以外は本家のものがそのまま使われる。
+QMK 本体のファイルはまるごと持たず、`patches/` の差分として当てる。本家が同じ箇所を
+変えると `git apply` が失敗してビルドが止まるので、本家の修正を黙って巻き戻すことがない。
 
 ## 本家の更新を取り込む
 
@@ -36,5 +39,6 @@ git clone --recurse-submodules https://github.com/sekigon-gonnoc/vial-qmk.git
 cd vial-qmk
 git checkout <upstream.env の UPSTREAM_REF>
 cp -a /path/to/keyboard-quantizer-config/keyboards /path/to/keyboard-quantizer-config/util .
+for p in /path/to/keyboard-quantizer-config/patches/*.patch; do git apply "$p"; done
 make sekigon/keyboard_quantizer/mini:vial
 ```
