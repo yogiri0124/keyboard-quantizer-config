@@ -181,14 +181,26 @@ class Report:
         self.fields = []  # (page, [usages] or (min, max), size, count, flags)
 
 
+def new_local():
+    return {"usages": [], "umin": None, "umax": None, "delimiter": False}
+
+
+def fits(lo, hi, bits):
+    """Whether lo..hi can be stored in a field of `bits` bits."""
+    if lo < 0:
+        return -(1 << (bits - 1)) <= lo and hi <= (1 << (bits - 1)) - 1
+    return hi < (1 << bits)
+
+
 def check(name, data, max_report_bytes):
     """Parse one descriptor. Returns (lines, errors, reports)."""
     lines, errors = [], []
     glob = {"page": None, "lmin": None, "lmax": None, "pmin": None, "pmax": None, "size": None, "count": None, "id": None}
     stack = []
-    local = {"usages": [], "umin": None, "umax": None}
+    local = new_local()
     depth = 0
     top = -1  # index of the current top-level collection
+    id_tag_seen = False
     reports = {}
     pos = 0
 
@@ -253,14 +265,19 @@ def check(name, data, max_report_bytes):
                 if not 1 <= value <= 255:
                     err(f"report ID {value} is outside 1-255")
                 glob["id"] = value
+                id_tag_seen = True
                 text = f"{item} ({value})"
             elif tag == 0x9:
                 glob["count"] = value
                 text = f"{item} ({value})"
             elif tag == 0xA:
+                if size:
+                    err("Push must not carry data")
                 stack.append(dict(glob))
                 text = item
             elif tag == 0xB:
+                if size:
+                    err("Pop must not carry data")
                 if not stack:
                     err("Pop without Push")
                 else:
@@ -269,25 +286,40 @@ def check(name, data, max_report_bytes):
             else:
                 text = f"{item} ({value})"
         elif kind == LOCAL:
-            page = glob["page"]
+            # A short usage takes the Usage Page in effect at the next main
+            # item, so keep its page as None until then.
+            page, value = split_usage(None, value, size) if tag in (0x0, 0x1, 0x2) else (None, value)
+            shown = page if page is not None else glob["page"]
             if tag == 0x0:
-                page, value = split_usage(page, value, size)
                 local["usages"].append((page, value))
-                text = f"{item} ({usage_name(page, value)})" if page is not None else f"{item} (0x{value:04X})"
+                text = f"{item} ({usage_name(shown, value)})" if shown is not None else f"{item} (0x{value:04X})"
             elif tag in (0x1, 0x2):
-                page, value = split_usage(page, value, size)
                 local["umin" if tag == 0x1 else "umax"] = (page, value)
                 text = f"{item} ({page_name(page)} {value})" if size == 4 else f"{item} ({value})"
+            elif tag == 0xA:
+                if value == 1:
+                    if local["delimiter"]:
+                        err("nested Delimiter open")
+                    local["delimiter"] = True
+                elif value == 0:
+                    if not local["delimiter"]:
+                        err("Delimiter close without open")
+                    local["delimiter"] = False
+                else:
+                    err(f"Delimiter value {value} is not 0 or 1")
+                text = f"{item} ({'open' if value == 1 else 'close' if value == 0 else value})"
             else:
                 text = f"{item} ({value})"
         else:  # MAIN
             if tag == 0xA:
                 if depth == 0:
                     top += 1
+                    if value != 1:
+                        err("top-level Collection is not an Application collection")
                 text = f"{item} ({COLLECTIONS.get(value, f'0x{value:02X}')})"
                 lines.append(indent + text)
                 depth += 1
-                local = {"usages": [], "umin": None, "umax": None}
+                local = new_local()
                 pos += 1 + size
                 continue
             if tag == 0xC:
@@ -296,19 +328,45 @@ def check(name, data, max_report_bytes):
                     err("End Collection without Collection")
                     depth = 0
                 lines.append("  " * depth + item)
-                local = {"usages": [], "umin": None, "umax": None}
+                local = new_local()
                 pos += 1 + size
                 continue
 
             # Input / Output / Feature
+            is_data = not (value & 0x01)
             if glob["size"] is None or glob["count"] is None:
                 err(f"{item} before Report Size and Report Count")
+            elif glob["count"] == 0:
+                err(f"{item} with Report Count 0")
+            if local["delimiter"]:
+                err(f"{item} inside an open Delimiter")
+
+            # Resolve short usages against the page in effect now.
+            def resolve(entry):
+                page, usage = entry
+                return (page if page is not None else glob["page"], usage)
+
+            local["usages"] = [resolve(u) for u in local["usages"]]
+            for k in ("umin", "umax"):
+                if local[k] is not None:
+                    local[k] = resolve(local[k])
             pages = [p for p, _ in local["usages"]]
             pages += [local[k][0] for k in ("umin", "umax") if local[k] is not None]
-            if not (value & 0x01) and (not pages or None in pages) and glob["page"] is None:
+            if is_data and (not pages or None in pages) and glob["page"] is None:
                 err(f"{item} without a Usage Page")
-            if glob["lmin"] is not None and glob["lmax"] is not None and glob["lmin"] > glob["lmax"] and not (value & 0x01):
-                err(f"{item}: Logical Minimum {glob['lmin']} > Logical Maximum {glob['lmax']}")
+            if (local["umin"] is None) != (local["umax"] is None):
+                err(f"{item}: Usage Minimum and Usage Maximum must come as a pair")
+            elif local["umin"] is not None:
+                if local["umin"][0] != local["umax"][0]:
+                    err(f"{item}: Usage Minimum and Usage Maximum are on different pages")
+                elif local["umin"][1] > local["umax"][1]:
+                    err(f"{item}: Usage Minimum {local['umin'][1]} > Usage Maximum {local['umax'][1]}")
+            lmin, lmax = glob["lmin"], glob["lmax"]
+            if is_data and lmin is not None and lmax is not None:
+                if lmin > lmax:
+                    err(f"{item}: Logical Minimum {lmin} > Logical Maximum {lmax}")
+                elif glob["size"] and glob["size"] <= 32 and not fits(lmin, lmax, glob["size"]):
+                    err(f"{item}: Logical range {lmin}..{lmax} does not fit in {glob['size']} bits")
             if depth == 0:
                 err(f"{item} outside any Collection")
             key = (tag, glob["id"] or 0)
@@ -329,7 +387,7 @@ def check(name, data, max_report_bytes):
                 usages = [usage_name(p, u) for p, u in local["usages"]]
             rep.fields.append((glob["page"], usages, glob["size"], glob["count"], main_flags(value), glob["lmin"], glob["lmax"]))
             text = f"{item} ({main_flags(value)})  size={glob['size']} count={glob['count']}"
-            local = {"usages": [], "umin": None, "umax": None}
+            local = new_local()
 
         lines.append(indent + text)
         pos += 1 + size
@@ -340,7 +398,7 @@ def check(name, data, max_report_bytes):
         errors.append(f"{name}: {len(stack)} Push without Pop")
 
     ids = {rep.report_id for rep in reports.values()}
-    if 0 in ids and len(ids) > 1:
+    if 0 in ids and (len(ids) > 1 or id_tag_seen):
         errors.append(f"{name}: reports with and without a Report ID are mixed")
 
     for rep in reports.values():

@@ -31,7 +31,17 @@ RESMUL = H(
 
 # (name, descriptor, expect an error)
 CASES = [
-    ("0..255 written as 15 00 25 FF", H("05 01 09 06 a1 01 05 07 19 00 15 00 25 ff 95 01 75 08 81 00 c0"), False),
+    ("0..255 written as 15 00 25 FF", H("05 01 09 06 a1 01 05 07 19 00 29 ff 15 00 25 ff 95 01 75 08 81 00 c0"), False),
+    ("Usage Page given after the usage", H("0b 02 00 01 00 a1 01 09 30 05 01 15 81 25 7f 75 08 95 01 81 06 c0"), False),
+    ("logical range too wide for the size", RESMUL.replace(H("25 01 35 00 45 0f 95 01 75 02 b1 02"), H("25 0f 35 00 45 0f 95 01 75 02 b1 02")), True),
+    ("Usage Minimum > Usage Maximum", H("05 01 09 02 a1 01 05 09 19 32 29 30 15 00 25 01 95 08 75 01 81 02 c0"), True),
+    ("Usage Minimum without Maximum", H("05 01 09 02 a1 01 05 09 19 01 15 00 25 01 95 08 75 01 81 02 c0"), True),
+    ("extended Usage Min/Max on different pages", H("05 01 09 02 a1 01 1b 01 00 09 00 2b 08 00 07 00 15 00 25 01 95 08 75 01 81 02 c0"), True),
+    ("Report ID tag with only an ID-less report", H("05 01 09 02 a1 01 05 09 19 01 29 08 15 00 25 01 95 08 75 01 81 02 85 02 c0"), True),
+    ("top-level Physical collection", H("05 01 09 02 a1 00 05 09 19 01 29 08 15 00 25 01 95 08 75 01 81 02 c0"), True),
+    ("Report Count 0", H("05 01 09 02 a1 01 05 09 19 01 29 08 15 00 25 01 95 00 75 01 81 02 c0"), True),
+    ("Delimiter left open", H("05 01 09 02 a1 01 a9 01 05 09 19 01 29 08 15 00 25 01 95 08 75 01 81 02 c0"), True),
+    ("Push with data", H("05 01 09 02 a1 01 a5 01 05 09 19 01 29 08 15 00 25 01 95 08 75 01 81 02 b4 c0"), True),
     ("long item missing its tag", H("05 01 09 06 a1 01 05 07 19 00 29 ff 15 00 25 ff 95 01 75 08 81 00 c0 fe 00"), True),
     ("long item missing its data", H("05 01 09 06 a1 01 05 07 19 00 29 ff 15 00 25 ff 95 01 75 08 81 00 c0 fe 10 f0"), True),
     ("Pop back to no report ID", H("05 01 09 06 a1 01 a4 85 01 05 07 19 00 29 01 15 00 25 01 95 08 75 01 81 00 b4 95 08 75 01 81 00 c0"), True),
