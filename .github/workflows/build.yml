@@ -97,6 +97,7 @@ jobs:
         # reaches the device. The decoded dump also goes to the job summary.
         working-directory: qmk
         run: |
+          python3 ../config/tools/test_hid_descriptors.py
           status=0
           python3 ../config/tools/hid_descriptors.py .build/*.elf --max-report-bytes 32 > hid.txt 2>&1 || status=$?
           cat hid.txt

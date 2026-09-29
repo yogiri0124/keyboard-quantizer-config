@@ -46,8 +46,10 @@ def read_symbols(path, names):
             st_name, st_value, st_size, st_info, _, st_shndx = struct.unpack_from("<IIIBBH", elf, off)
             end = elf.index(b"\0", strtab[4] + st_name)
             name = elf[strtab[4] + st_name : end].decode()
-            if name not in names or st_size == 0 or st_shndx == 0 or st_shndx >= len(sections):
+            if name not in names or st_shndx == 0 or st_shndx >= len(sections):
                 continue
+            if st_size == 0:
+                raise SystemExit(f"{name}: symbol has size 0 (empty descriptor?)")
             sec = sections[st_shndx]
             if sec[1] == SHT_NOBITS:
                 raise SystemExit(f"{name}: lives in a NOBITS section, cannot read its bytes")
@@ -90,7 +92,10 @@ ITEM_NAMES = {
     (LOCAL, 0xA): "Delimiter",
 }
 
-SIGNED = {(GLOBAL, 0x1), (GLOBAL, 0x2), (GLOBAL, 0x3), (GLOBAL, 0x4), (GLOBAL, 0x5)}
+# Minimums are signed. A maximum is signed only when its minimum is negative
+# (as Linux reads it), so "0..255" may be written as 15 00 25 FF.
+SIGNED_MIN = {(GLOBAL, 0x1), (GLOBAL, 0x3)}
+MAX_OF = {(GLOBAL, 0x2): "lmin", (GLOBAL, 0x4): "pmin"}
 
 PAGES = {0x01: "Generic Desktop", 0x07: "Keyboard", 0x08: "LED", 0x09: "Button", 0x0C: "Consumer"}
 
@@ -147,10 +152,31 @@ def main_flags(value):
     return ",".join(bits)
 
 
+def signed(value, size):
+    if size and value & (1 << (size * 8 - 1)):
+        return value - (1 << (size * 8))
+    return value
+
+
+def unit_exponent(value, size):
+    """Unit Exponent is a 4-bit two's complement nibble (0xE is -2)."""
+    if value < 16:
+        return value - 16 if value & 0x8 else value
+    return signed(value, size)
+
+
+def split_usage(page, value, size):
+    """A 4-byte usage carries its own page in the high half."""
+    if size == 4:
+        return value >> 16, value & 0xFFFF
+    return page, value
+
+
 class Report:
-    def __init__(self, kind, report_id):
+    def __init__(self, kind, report_id, top):
         self.kind = kind
         self.report_id = report_id
+        self.top = top  # index of the top-level collection it belongs to
         self.bits = 0
         self.fields = []  # (page, [usages] or (min, max), size, count, flags)
 
@@ -158,12 +184,11 @@ class Report:
 def check(name, data, max_report_bytes):
     """Parse one descriptor. Returns (lines, errors, reports)."""
     lines, errors = [], []
-    glob = {"page": None, "lmin": None, "lmax": None, "size": None, "count": None, "id": None}
+    glob = {"page": None, "lmin": None, "lmax": None, "pmin": None, "pmax": None, "size": None, "count": None, "id": None}
     stack = []
     local = {"usages": [], "umin": None, "umax": None}
     depth = 0
-    uses_ids = False
-    main_seen_before_id = False
+    top = -1  # index of the current top-level collection
     reports = {}
     pos = 0
 
@@ -173,7 +198,7 @@ def check(name, data, max_report_bytes):
     while pos < len(data):
         prefix = data[pos]
         if prefix == 0xFE:  # long item
-            if pos + 1 >= len(data):
+            if pos + 2 >= len(data) or pos + 3 + data[pos + 1] > len(data):
                 err("truncated long item")
                 break
             size = data[pos + 1]
@@ -189,8 +214,14 @@ def check(name, data, max_report_bytes):
             break
         raw = data[pos + 1 : pos + 1 + size]
         value = int.from_bytes(raw, "little") if size else 0
-        if (kind, tag) in SIGNED and size and value & (1 << (size * 8 - 1)):
-            value -= 1 << (size * 8)
+        if (kind, tag) in SIGNED_MIN:
+            value = signed(value, size)
+        elif (kind, tag) in MAX_OF:
+            low = glob[MAX_OF[(kind, tag)]]
+            if low is not None and low < 0:
+                value = signed(value, size)
+        elif (kind, tag) == (GLOBAL, 0x5):
+            value = unit_exponent(value, size)
         item = ITEM_NAMES.get((kind, tag))
         indent = "  " * depth
 
@@ -207,18 +238,21 @@ def check(name, data, max_report_bytes):
             elif tag == 0x2:
                 glob["lmax"] = value
                 text = f"{item} ({value})"
+            elif tag == 0x3:
+                glob["pmin"] = value
+                text = f"{item} ({value})"
+            elif tag == 0x4:
+                glob["pmax"] = value
+                text = f"{item} ({value})"
             elif tag == 0x7:
                 glob["size"] = value
                 text = f"{item} ({value})"
                 if value == 0 or value > 32:
                     err(f"report size {value} is outside 1-32")
             elif tag == 0x8:
-                if value == 0:
-                    err("report ID 0 is reserved")
-                if main_seen_before_id:
-                    err("report ID used after main items that had no report ID")
+                if not 1 <= value <= 255:
+                    err(f"report ID {value} is outside 1-255")
                 glob["id"] = value
-                uses_ids = True
                 text = f"{item} ({value})"
             elif tag == 0x9:
                 glob["count"] = value
@@ -237,21 +271,19 @@ def check(name, data, max_report_bytes):
         elif kind == LOCAL:
             page = glob["page"]
             if tag == 0x0:
-                # A 4-byte usage carries its own page in the high half.
-                if size == 4:
-                    page, value = value >> 16, value & 0xFFFF
+                page, value = split_usage(page, value, size)
                 local["usages"].append((page, value))
-                text = f"{item} ({usage_name(page, value)})"
-            elif tag == 0x1:
-                local["umin"] = value
-                text = f"{item} ({value})"
-            elif tag == 0x2:
-                local["umax"] = value
-                text = f"{item} ({value})"
+                text = f"{item} ({usage_name(page, value)})" if page is not None else f"{item} (0x{value:04X})"
+            elif tag in (0x1, 0x2):
+                page, value = split_usage(page, value, size)
+                local["umin" if tag == 0x1 else "umax"] = (page, value)
+                text = f"{item} ({page_name(page)} {value})" if size == 4 else f"{item} ({value})"
             else:
                 text = f"{item} ({value})"
         else:  # MAIN
             if tag == 0xA:
+                if depth == 0:
+                    top += 1
                 text = f"{item} ({COLLECTIONS.get(value, f'0x{value:02X}')})"
                 lines.append(indent + text)
                 depth += 1
@@ -271,18 +303,28 @@ def check(name, data, max_report_bytes):
             # Input / Output / Feature
             if glob["size"] is None or glob["count"] is None:
                 err(f"{item} before Report Size and Report Count")
-            if glob["page"] is None and not (value & 0x01):
+            pages = [p for p, _ in local["usages"]]
+            pages += [local[k][0] for k in ("umin", "umax") if local[k] is not None]
+            if not (value & 0x01) and (not pages or None in pages) and glob["page"] is None:
                 err(f"{item} without a Usage Page")
             if glob["lmin"] is not None and glob["lmax"] is not None and glob["lmin"] > glob["lmax"] and not (value & 0x01):
                 err(f"{item}: Logical Minimum {glob['lmin']} > Logical Maximum {glob['lmax']}")
-            if not uses_ids:
-                main_seen_before_id = True
+            if depth == 0:
+                err(f"{item} outside any Collection")
             key = (tag, glob["id"] or 0)
-            rep = reports.setdefault(key, Report(REPORT_KINDS[tag], glob["id"] or 0))
-            bits = (glob["size"] or 0) * (glob["count"] or 0)
-            rep.bits += bits
+            rep = reports.setdefault(key, Report(REPORT_KINDS[tag], glob["id"] or 0, top))
+            if rep.top != top:
+                err(f"{rep.kind} report {rep.report_id} spans more than one top-level Collection")
+            field_size, field_count = glob["size"] or 0, glob["count"] or 0
+            # Each field must fit in the 4 bytes it starts in (HID 1.11 8.4).
+            for n in range(field_count):
+                start = rep.bits + n * field_size
+                if start % 8 + field_size > 32:
+                    err(f"{item} field at bit {start} of report {rep.report_id} spans more than 4 bytes")
+                    break
+            rep.bits += field_size * field_count
             if local["umin"] is not None and local["umax"] is not None:
-                usages = (local["umin"], local["umax"])
+                usages = (local["umin"][1], local["umax"][1])
             else:
                 usages = [usage_name(p, u) for p, u in local["usages"]]
             rep.fields.append((glob["page"], usages, glob["size"], glob["count"], main_flags(value), glob["lmin"], glob["lmax"]))
@@ -296,6 +338,10 @@ def check(name, data, max_report_bytes):
         errors.append(f"{name}: {depth} Collection(s) left open")
     if stack:
         errors.append(f"{name}: {len(stack)} Push without Pop")
+
+    ids = {rep.report_id for rep in reports.values()}
+    if 0 in ids and len(ids) > 1:
+        errors.append(f"{name}: reports with and without a Report ID are mixed")
 
     for rep in reports.values():
         if rep.bits % 8:
