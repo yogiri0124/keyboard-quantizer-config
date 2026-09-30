@@ -7,11 +7,14 @@
 #include <stdint.h>
 
 #include "action.h" // keyrecord_t
+#include "report.h" // report_mouse_t
 
 void mouse_config_load(void);
 void mouse_config_reset(void);
 void mouse_config_save(void);
 void mouse_housekeeping(void);
+/* Called by matrix.c right before each mouse report goes out. */
+void mouse_wheel_flush(report_mouse_t *mouse);
 bool process_record_mouse(uint16_t keycode, keyrecord_t *record);
 void post_process_record_mouse(uint16_t keycode, keyrecord_t *record);
 

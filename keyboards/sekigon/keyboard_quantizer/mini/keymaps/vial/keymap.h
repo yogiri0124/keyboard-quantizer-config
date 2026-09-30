@@ -62,11 +62,15 @@ typedef union {
         uint8_t reserved : 6;
         uint8_t scroll_div;
         uint8_t gesture_threshold;
-        uint8_t cursor_scale;
+        /* USER_CURSOR_SCALE_MAX needs 6 bits. The top two briefly held wheel
+         * flags in a test build; keeping them apart ignores whatever is left. */
+        uint8_t cursor_scale : 6;
+        uint8_t reserved2 : 2;
     };
 } user_config_t;
 
 _Static_assert(sizeof(user_config_t) == 4, "user_config_t must be 4 bytes");
+_Static_assert(USER_CURSOR_SCALE_MAX < 64, "cursor scale must fit 6 bits");
 _Static_assert((int)U_CLR == (int)QK_KB_25, "vial customKeycodes order must match QK_KB_0..25");
 _Static_assert(USER_SCROLL_DIV_DEFAULT >= USER_SCROLL_DIV_MIN && USER_SCROLL_DIV_DEFAULT <= USER_SCROLL_DIV_MAX,
                "default scroll div must be in range");

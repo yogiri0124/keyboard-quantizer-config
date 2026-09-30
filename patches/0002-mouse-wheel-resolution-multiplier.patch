@@ -1,0 +1,176 @@
+diff --git a/tmk_core/protocol/chibios/usb_main.c b/tmk_core/protocol/chibios/usb_main.c
+index 4de994c..bbeafda 100644
+--- a/tmk_core/protocol/chibios/usb_main.c
++++ b/tmk_core/protocol/chibios/usb_main.c
+@@ -176,6 +176,60 @@ void usb_event_queue_task(void) {
+     }
+ }
+ 
++#if defined(MOUSE_ENABLE) && defined(MOUSE_WHEEL_RESOLUTION_MULTIPLIER)
++#    if !defined(MOUSE_SHARED_EP)
++#        error "MOUSE_WHEEL_RESOLUTION_MULTIPLIER expects the mouse on the shared endpoint"
++#    endif
++#    define HID_REPORT_TYPE_FEATURE 3
++
++/* Mouse feature report: [REPORT_ID_MOUSE, bits 0-1 wheel, bits 2-3 pan].
++ * Zero (x1) until the host writes it, and again when a host reads the
++ * report descriptor (see usb_requests_hook_cb). */
++static uint8_t _Alignas(4) mouse_feature_report[2]     = {REPORT_ID_MOUSE, 0};
++static uint8_t _Alignas(4) mouse_feature_set_buf[2];
++
++static void mouse_feature_set_cb(USBDriver *usbp) {
++    (void)usbp;
++    if (mouse_feature_set_buf[0] == REPORT_ID_MOUSE) {
++        mouse_feature_report[1] = mouse_feature_set_buf[1] & 0x0F;
++    }
++}
++
++typedef enum {
++    MOUSE_FEATURE_NOT_MINE, /* let the generic handlers look at it */
++    MOUSE_FEATURE_DONE,
++    MOUSE_FEATURE_STALL, /* ours but malformed: refuse it */
++} mouse_feature_result_t;
++
++static mouse_feature_result_t mouse_feature_request(USBDriver *usbp) {
++    usb_control_request_t *setup = (usb_control_request_t *)usbp->setup;
++    bool                   in    = (setup->bmRequestType & USB_RTYPE_DIR_MASK) == USB_RTYPE_DIR_DEV2HOST;
++
++    if (setup->wIndex != SHARED_INTERFACE || setup->wValue.hbyte != HID_REPORT_TYPE_FEATURE || setup->wValue.lbyte != REPORT_ID_MOUSE) {
++        return MOUSE_FEATURE_NOT_MINE;
++    }
++    if (in && setup->bRequest == HID_REQ_GetReport) {
++        /* The driver trims the transfer to wLength. */
++        usbSetupTransfer(usbp, mouse_feature_report, sizeof(mouse_feature_report), NULL);
++        return MOUSE_FEATURE_DONE;
++    }
++    if (!in && setup->bRequest == HID_REQ_SetReport) {
++        /* Any other length must not fall through to the LED handler. */
++        if (setup->wLength != sizeof(mouse_feature_set_buf)) {
++            return MOUSE_FEATURE_STALL;
++        }
++        usbSetupTransfer(usbp, mouse_feature_set_buf, sizeof(mouse_feature_set_buf), mouse_feature_set_cb);
++        return MOUSE_FEATURE_DONE;
++    }
++    return MOUSE_FEATURE_NOT_MINE;
++}
++
++uint8_t usb_mouse_wheel_multiplier(bool vertical) {
++    uint8_t bits = mouse_feature_report[1] >> (vertical ? 0 : 2);
++    return (bits & 0x03) ? MOUSE_WHEEL_RESOLUTION_MULTIPLIER : 1;
++}
++#endif
++
+ /* Handles the USB driver global events. */
+ static void usb_event_cb(USBDriver *usbp, usbevent_t event) {
+     switch (event) {
+@@ -262,6 +316,18 @@ static bool usb_requests_hook_cb(USBDriver *usbp) {
+ 
+     /* Handle HID class specific requests */
+     if ((setup->bmRequestType & (USB_RTYPE_TYPE_MASK | USB_RTYPE_RECIPIENT_MASK)) == (USB_RTYPE_TYPE_CLASS | USB_RTYPE_RECIPIENT_INTERFACE)) {
++#if defined(MOUSE_ENABLE) && defined(MOUSE_WHEEL_RESOLUTION_MULTIPLIER)
++        /* Before the generic handlers: GetReport would answer with the mouse
++         * input report and SetReport would treat the write as LED state. */
++        switch (mouse_feature_request(usbp)) {
++            case MOUSE_FEATURE_DONE:
++                return true;
++            case MOUSE_FEATURE_STALL:
++                return false;
++            default:
++                break;
++        }
++#endif
+         switch (setup->bmRequestType & USB_RTYPE_DIR_MASK) {
+             case USB_RTYPE_DIR_DEV2HOST:
+                 switch (setup->bRequest) {
+@@ -311,6 +377,15 @@ static bool usb_requests_hook_cb(USBDriver *usbp) {
+         if (descriptor == NULL) {
+             return false;
+         }
++#if defined(MOUSE_ENABLE) && defined(MOUSE_WHEEL_RESOLUTION_MULTIPLIER)
++        /* A host reading the report descriptor is starting the device afresh
++         * and sets the multiplier again if it supports it, so go back to x1
++         * here. Not on bus reset: Windows resets the device on resume from
++         * suspend but does not write the multiplier again. */
++        if (setup->wValue.hbyte == HID_DTYPE_Report && setup->wIndex == SHARED_INTERFACE) {
++            mouse_feature_report[1] = 0;
++        }
++#endif
+         usbSetupTransfer(usbp, (uint8_t *)descriptor->ud_string, descriptor->ud_size, NULL);
+         return true;
+     }
+diff --git a/tmk_core/protocol/chibios/usb_main.h b/tmk_core/protocol/chibios/usb_main.h
+index 5ba6fb1..3885956 100644
+--- a/tmk_core/protocol/chibios/usb_main.h
++++ b/tmk_core/protocol/chibios/usb_main.h
+@@ -66,4 +66,9 @@ int8_t sendchar(uint8_t c);
+ 
+ bool virtser_usb_request_cb(USBDriver *usbp);
+ 
++#if defined(MOUSE_ENABLE) && defined(MOUSE_WHEEL_RESOLUTION_MULTIPLIER)
++/* Wheel counts per detent the host asked for: 1, or the multiplier. */
++uint8_t usb_mouse_wheel_multiplier(bool vertical);
++#endif
++
+ #endif
+diff --git a/tmk_core/protocol/usb_descriptor.c b/tmk_core/protocol/usb_descriptor.c
+index 7efd085..06835e6 100644
+--- a/tmk_core/protocol/usb_descriptor.c
++++ b/tmk_core/protocol/usb_descriptor.c
+@@ -155,6 +155,23 @@ const USB_Descriptor_HIDReport_Datatype_t PROGMEM SharedReport[] = {
+ #    endif
+             HID_RI_INPUT(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_RELATIVE),
+ 
++#    ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
++            // Each wheel sits in a Logical collection with a Resolution
++            // Multiplier feature (2 bits: 0 = x1, 1 = xN). A host that writes
++            // 1 reads every wheel count as 1/N detent. The input report layout
++            // is unchanged; the feature report is 1 byte after the report ID.
++            HID_RI_COLLECTION(8, 0x02),    // Logical
++                HID_RI_USAGE(8, 0x48),     // Resolution Multiplier
++                HID_RI_LOGICAL_MINIMUM(8, 0),
++                HID_RI_LOGICAL_MAXIMUM(8, 1),
++                HID_RI_PHYSICAL_MINIMUM(8, 1),
++                HID_RI_PHYSICAL_MAXIMUM(8, MOUSE_WHEEL_RESOLUTION_MULTIPLIER),
++                HID_RI_REPORT_COUNT(8, 0x01),
++                HID_RI_REPORT_SIZE(8, 0x02),
++                HID_RI_FEATURE(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_ABSOLUTE),
++                HID_RI_PHYSICAL_MINIMUM(8, 0),
++                HID_RI_PHYSICAL_MAXIMUM(8, 0),
++#    endif
+             // Vertical wheel (1 byte)
+             HID_RI_USAGE(8, 0x38),         // Wheel
+             HID_RI_LOGICAL_MINIMUM(8, -127),
+@@ -162,6 +179,23 @@ const USB_Descriptor_HIDReport_Datatype_t PROGMEM SharedReport[] = {
+             HID_RI_REPORT_COUNT(8, 0x01),
+             HID_RI_REPORT_SIZE(8, 0x08),
+             HID_RI_INPUT(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_RELATIVE),
++#    ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
++            HID_RI_END_COLLECTION(0),
++            HID_RI_COLLECTION(8, 0x02),    // Logical
++                HID_RI_USAGE(8, 0x48),     // Resolution Multiplier
++                HID_RI_LOGICAL_MINIMUM(8, 0),
++                HID_RI_LOGICAL_MAXIMUM(8, 1),
++                HID_RI_PHYSICAL_MINIMUM(8, 1),
++                HID_RI_PHYSICAL_MAXIMUM(8, MOUSE_WHEEL_RESOLUTION_MULTIPLIER),
++                HID_RI_REPORT_COUNT(8, 0x01),
++                HID_RI_REPORT_SIZE(8, 0x02),
++                HID_RI_FEATURE(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_ABSOLUTE),
++                HID_RI_PHYSICAL_MINIMUM(8, 0),
++                HID_RI_PHYSICAL_MAXIMUM(8, 0),
++                // Pad the feature report to a whole byte
++                HID_RI_REPORT_SIZE(8, 0x04),
++                HID_RI_FEATURE(8, HID_IOF_CONSTANT),
++#    endif
+             // Horizontal wheel (1 byte)
+             HID_RI_USAGE_PAGE(8, 0x0C),    // Consumer
+             HID_RI_USAGE(16, 0x0238),      // AC Pan
+@@ -170,6 +204,9 @@ const USB_Descriptor_HIDReport_Datatype_t PROGMEM SharedReport[] = {
+             HID_RI_REPORT_COUNT(8, 0x01),
+             HID_RI_REPORT_SIZE(8, 0x08),
+             HID_RI_INPUT(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_RELATIVE),
++#    ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
++            HID_RI_END_COLLECTION(0),
++#    endif
+         HID_RI_END_COLLECTION(0),
+     HID_RI_END_COLLECTION(0),
+ #    ifndef MOUSE_SHARED_EP

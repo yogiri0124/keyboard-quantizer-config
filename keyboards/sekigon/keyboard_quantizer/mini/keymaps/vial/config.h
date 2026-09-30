@@ -24,6 +24,10 @@
 #define MATRIX_MSGES_ROW 31
 
 #define MOUSE_EXTENDED_REPORT
+/* High-resolution wheel (patches/0002). A host that enables it splits a
+ * detent into this many counts; one that does not keeps x1. 120 matches the
+ * Windows/Linux wheel unit exactly: one count is a wheel delta of 1. */
+#define MOUSE_WHEEL_RESOLUTION_MULTIPLIER 120
 
 #define DYNAMIC_KEYMAP_LAYER_COUNT 8
 #define WEAR_LEVELING_BACKING_SIZE (8192 * 2)

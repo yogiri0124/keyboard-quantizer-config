@@ -5,7 +5,7 @@ TAP_DANCE_ENABLE = yes
 COMBO_ENABLE = yes
 QMK_SETTINGS = yes
 
-SRC += quantizer_mouse.c raw_hid.c
+SRC += quantizer_mouse.c scroll_out.c raw_hid.c
 
 include keyboards/sekigon/keyboard_quantizer/mini/keymaps/vial/cli/rules.mk
 include keyboards/sekigon/keyboard_quantizer/mini/keymaps/vial/key_override/rules.mk

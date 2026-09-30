@@ -16,7 +16,11 @@
 #include "report_descriptor_parser.h"
 #include "keymap.h"
 #include "quantizer_mouse.h"
+#include "scroll_out.h"
 #include "via.h"
+#ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
+#    include "usb_main.h"
+#endif
 
 enum via_mouse_value {
     id_mouse_scroll_div         = 1,
@@ -116,10 +120,6 @@ static uint16_t      gesture_idle_ms             = 0;
 static gesture_id_t  gesture_dir_lock            = GESTURE_NONE;
 static int32_t       cursor_prev_x               = 0;
 static int32_t       cursor_prev_y               = 0;
-static int32_t       scroll_acc_h                = 0;
-static int32_t       scroll_acc_v                = 0;
-static int32_t       scroll_out_h                = 0;
-static int32_t       scroll_out_v                = 0;
 static int32_t       wheel_batch_v               = 0;
 static int32_t       wheel_batch_h               = 0;
 static int16_t       cursor_scale_x_frac         = 0;
@@ -274,6 +274,17 @@ static int8_t clamp_hid8(int32_t value) {
     return (int8_t)clamp_i32(value, HID8_MIN, HID8_MAX);
 }
 
+/* Host wheel counts per detent: 1 until Windows/Linux turn on the resolution
+ * multiplier (patches/0002), then MOUSE_WHEEL_RESOLUTION_MULTIPLIER. */
+static int32_t wheel_multiplier(bool vertical) {
+#ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
+    return usb_mouse_wheel_multiplier(vertical);
+#else
+    (void)vertical;
+    return 1;
+#endif
+}
+
 static mouse_xy_report_t clamp_xy(int32_t value) {
     return (mouse_xy_report_t)clamp_i32(value, XY_REPORT_MIN, XY_REPORT_MAX);
 }
@@ -312,13 +323,6 @@ static void clear_gesture_accum_if_idle(void) {
     }
 }
 
-static void clear_ball_scroll_frac(void) {
-    scroll_acc_h = 0;
-    scroll_acc_v = 0;
-    scroll_out_h = 0;
-    scroll_out_v = 0;
-}
-
 static void clear_cursor_scale_frac(void) {
     cursor_scale_x_frac = 0;
     cursor_scale_y_frac = 0;
@@ -327,12 +331,6 @@ static void clear_cursor_scale_frac(void) {
 static void clear_cursor_recoil(void) {
     cursor_prev_x = 0;
     cursor_prev_y = 0;
-}
-
-static void clear_scroll_if_inactive(void) {
-    if (!ball_is_scroll()) {
-        clear_ball_scroll_frac();
-    }
 }
 
 /* Scroll, gesture and slow-cursor are one state machine instantiated three
@@ -357,7 +355,7 @@ static void mode_drop_ball_history(void) {
 }
 
 static const mouse_mode_def_t mode_defs[MOUSE_MODE_COUNT] = {
-    [MODE_SCROLL]  = {U_SCR, U_DSCR, U_OSCR, mode_drop_ball_history, clear_scroll_if_inactive},
+    [MODE_SCROLL]  = {U_SCR, U_DSCR, U_OSCR, mode_drop_ball_history, NULL},
     [MODE_GESTURE] = {U_GES, U_TGES, U_OGES, mode_drop_ball_history, clear_gesture_accum_if_idle},
     [MODE_SLOW]    = {U_SLOW, U_TSLO, U_OSLO, NULL, clear_slow_cursor_frac_if_idle},
 };
@@ -369,7 +367,9 @@ static void mode_enter(mouse_mode_id_t id) {
 }
 
 static void mode_settle(mouse_mode_id_t id) {
-    mode_defs[id].on_settle();
+    if (mode_defs[id].on_settle != NULL) {
+        mode_defs[id].on_settle();
+    }
 }
 
 static void clear_mode_fracs(void) {
@@ -888,7 +888,6 @@ static void slow_scroll_key(bool pressed, bool magic) {
             slow_scroll.latched = !slow_scroll.latched;
         }
     }
-    clear_ball_scroll_frac();
 }
 
 static void wheel_repeat_reset(void); /* defined with the wheel code below */
@@ -900,7 +899,6 @@ static void mouse_modes_reset(void) {
     clear_drag_locks();
     clear_mod_locks();
     clear_slow_cursor_frac_if_idle();
-    clear_ball_scroll_frac();
     clear_gesture_motion();
     clear_cursor_recoil();
     wheel_repeat_reset();
@@ -909,6 +907,7 @@ static void mouse_modes_reset(void) {
     wheel_move_h          = 0;
     wheel_batch_v         = 0;
     wheel_batch_h         = 0;
+    scroll_out_reset();
     /* Drop leftover xy/h/v from this scan and release drag-lock buttons. */
     {
         report_mouse_t mouse = {0};
@@ -919,9 +918,11 @@ static void mouse_modes_reset(void) {
 
 void mouse_config_save(void) {
     config_dirty                  = false;
+    user_config.reserved          = 0;
     user_config.scroll_div        = ball_scroll_div;
     user_config.gesture_threshold = mouse_gesture_threshold;
     user_config.cursor_scale      = mouse_cursor_scale;
+    user_config.reserved2         = 0;
     eeconfig_update_user(user_config.raw);
 }
 
@@ -972,7 +973,6 @@ void mouse_config_load(void) {
 
 static void apply_scroll_div(uint8_t value) {
     ball_scroll_div = clamp_u8(value, SCROLL_DIV_MIN, SCROLL_DIV_MAX);
-    clear_ball_scroll_frac();
 }
 
 static void apply_cursor_scale(uint8_t value) {
@@ -1278,38 +1278,20 @@ static int32_t scroll_div(void) {
     return div < 1 ? 1 : div;
 }
 
-static int32_t take_scroll_ticks(int32_t delta, int32_t *acc) {
-    if (delta == 0) {
-        return 0;
-    }
-    int32_t div = scroll_div();
-    *acc += delta;
-    int32_t ticks = *acc / div;
-    *acc -= ticks * div;
-    return ticks;
-}
-
 /* Sensor: X+ right, Y+ down. Mapping: h = x, v = -y (ball-up = wheel-up).
- * Raw HID counts, not cursor DPI. Remainder stays in acc; extra ticks
- * beyond ±127 on this send are dropped, not saved for a later jump. */
+ * scroll_div() raw ball counts make one detent. */
 static void apply_ball_scroll(report_mouse_t *mouse, int32_t x, int32_t y) {
     mouse->x = 0;
     mouse->y = 0;
     mouse->h = 0;
     mouse->v = 0;
-
-    scroll_out_h += take_scroll_ticks(x, &scroll_acc_h);
-    scroll_out_v += take_scroll_ticks(-y, &scroll_acc_v);
-    if (scroll_out_h != 0 || scroll_out_v != 0) {
-        mouse_send_flag = true;
-        mouse->h        = clamp_hid8(scroll_out_h);
-        mouse->v        = clamp_hid8(scroll_out_v);
-    }
+    scroll_out_ball(x, -y, scroll_div());
+    mouse_send_flag = true;
 }
 
 static void apply_ball_cursor(report_mouse_t *mouse, scaled_report_t const *scaled) {
-    /* Physical wheel/tilt are merged later in mouse_scan_end. Clear leftover
-     * h/v from ball-scroll so they do not share this cursor report. */
+    /* All wheel output waits in scroll_out and is written into the report
+     * by mouse_wheel_flush() at send time, so h/v here are stale. */
     mouse->h = 0;
     mouse->v = 0;
     /* Wheel/pan-only packets have x=y=0. Do not treat that as "cursor stopped"
@@ -1396,12 +1378,51 @@ void pointing_device_keycode_handler(uint16_t keycode, bool pressed) {
     }
     report_mouse_t mouse = pointing_device_get_report();
     mouse_merge_buttons(&mouse);
+    mouse_wheel_flush(&mouse);
     pointing_device_set_report(mouse);
     pointing_device_send();
-    /* Motion in this report is on the wire. Do not send it again, and do not
-     * keep ball-scroll ticks that were just flushed. */
+    /* Motion in this report is on the wire. Do not send it again; only wheel
+     * output that did not fit is left for the next report. */
     mouse_send_flag = false;
     mouse_after_send();
+}
+
+/* Sends the pending wheel output now, report after report, while the
+ * modifier that came with it is still down; a remainder carried to a later
+ * report could arrive after it is released. 128 reports cover the largest
+ * value one input can carry (127 detents x 120 counts / 127 per report). */
+static void send_wheel_now(void) {
+    for (uint8_t i = 0; i < 128 && scroll_out_pending(); i++) {
+        report_mouse_t more = pointing_device_get_report();
+        mouse_merge_buttons(&more);
+        mouse_wheel_flush(&more);
+        pointing_device_set_report(more);
+        pointing_device_send();
+    }
+    mouse_send_flag = false;
+    mouse_after_send();
+}
+
+/* patches/0003: QMK's own mousekey reports land here instead of going straight
+ * to the host. That covers what process_wheel_keycode() never sees: WH_* with
+ * a modifier (LCTL(WH_UP)), macros, and MS_* keys. The wheel gets the host
+ * multiplier like every other wheel source, and the report keeps the drag-lock
+ * buttons. Sent right away, because a modified key releases its modifier just
+ * after this returns. */
+void mousekey_host_send(report_mouse_t *report) {
+    if (report == NULL) {
+        return;
+    }
+    report_mouse_t mouse = pointing_device_get_report();
+    mouse.x              = clamp_xy((int32_t)mouse.x + report->x);
+    mouse.y              = clamp_xy((int32_t)mouse.y + report->y);
+    scroll_out_detents(report->v, true, true);
+    scroll_out_detents(report->h, false, true);
+    mouse_merge_buttons(&mouse);
+    mouse_wheel_flush(&mouse);
+    pointing_device_set_report(mouse);
+    pointing_device_send();
+    send_wheel_now();
 }
 
 static void exec_identity_tap(uint16_t kc) {
@@ -1457,21 +1478,25 @@ static uint16_t wheel_kc_for_delta(int32_t delta, bool vertical) {
     return delta > 0 ? KC_MS_WH_LEFT : KC_MS_WH_RIGHT;
 }
 
-/* Adds a signed amount to the pending report. Everything about direction is
+/* Adds val detents from a wheel or WH_* key. Everything about direction is
  * already baked into val, so this never consults a keycode. */
 static void add_wheel(int16_t val, bool vertical) {
     if (val == 0) {
         return;
     }
-    report_mouse_t report = pointing_device_get_report();
-    int8_t         amount = clamp_hid8(val);
-    if (vertical) {
-        report.v = clamp_hid8((int32_t)report.v + amount);
+    /* With a modifier down (Ctrl + wheel = zoom), the scroll must reach the
+     * host while the modifier still is: send it now, report after report.
+     * Only modifiers this keyboard sends are visible here. */
+    uint8_t mods = get_mods() | get_weak_mods();
+#ifndef NO_ACTION_ONESHOT
+    mods |= get_oneshot_mods();
+#endif
+    scroll_out_detents(clamp_hid8(val), vertical, mods != 0);
+    if (mods != 0) {
+        send_wheel_now();
     } else {
-        report.h = clamp_hid8((int32_t)report.h + amount);
+        mouse_send_flag = true;
     }
-    pointing_device_set_report(report);
-    mouse_send_flag = true;
 }
 
 /* A key bound to WH_* emits the direction QMK assigns to that keycode. */
@@ -1649,8 +1674,6 @@ void mouse_report_hook(mouse_parse_result_t const *report) {
         return;
     }
 
-    clear_ball_scroll_frac();
-
     if (ball_is_gesture()) {
         /* Ball counts drive keymap actions instead of motion, so commit the
          * cleared report before running them. A gesture can be bound to any
@@ -1696,9 +1719,16 @@ void mouse_scan_end(void) {
     wheel_repeat_task();
 }
 
+/* Moves up to ±127 host counts of pending wheel output into the report. */
+void mouse_wheel_flush(report_mouse_t *mouse) {
+    scroll_out_flush(mouse);
+}
+
 void mouse_after_send(void) {
-    scroll_out_h = 0;
-    scroll_out_v = 0;
+    /* Whatever did not fit goes out with the next report. */
+    if (scroll_out_pending()) {
+        mouse_send_flag = true;
+    }
 }
 
 bool process_record_mouse(uint16_t keycode, keyrecord_t *record) {
@@ -1797,6 +1827,11 @@ void post_process_record_mouse(uint16_t keycode, keyrecord_t *record) {
 void mouse_housekeeping(void) {
     apply_mod_locks();
     mouse_config_task();
+    /* The host may switch the wheel multiplier at any time, which can make a
+     * fraction that was waiting sendable. */
+    if (scroll_out_pending()) {
+        mouse_send_flag = true;
+    }
     if (gesture_idle_ms != 0) {
         uint16_t idle = timer_elapsed(gesture_idle_ms);
         if (gesture_dir_lock != GESTURE_NONE && idle > GESTURE_LOCK_IDLE_MS) {
@@ -1894,6 +1929,8 @@ void hid_cli_print(void) {
      * the right must show pan>0 here. If it does not, the device inverts AC Pan
      * and wheel_kc_for_delta() is where that is corrected. */
     printf("wheel %d  pan %d  (positive = up / right)\n", (int)hid_stats.last_wheel, (int)hid_stats.last_pan);
+    /* What the PC asked for: x1 until Windows/Linux enable high resolution. */
+    printf("host wheel x%d  pan x%d\n", (int)wheel_multiplier(true), (int)wheel_multiplier(false));
 }
 
 void hid_cli_print_desc(void) {

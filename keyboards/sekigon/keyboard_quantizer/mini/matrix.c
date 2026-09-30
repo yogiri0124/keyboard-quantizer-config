@@ -84,6 +84,9 @@ __attribute__((weak)) void keyboard_report_post_hook(void) {}
 __attribute__((weak)) void mouse_on_host_disconnect(void) {}
 __attribute__((weak)) void mouse_scan_end(void) {}
 __attribute__((weak)) void mouse_after_send(void) {}
+__attribute__((weak)) void mouse_wheel_flush(report_mouse_t* mouse) {
+    (void)mouse;
+}
 __attribute__((weak)) void mouse_merge_buttons(report_mouse_t* mouse) {
 #ifdef MOUSEKEY_ENABLE
     if (mouse != NULL) {
@@ -543,6 +546,8 @@ bool pointing_device_task(void) {
         /* Shared mouse EP: last report wins. Rebuild buttons from mousekey + keymap locks. */
         report_mouse_t mouse = pointing_device_get_report();
         mouse_merge_buttons(&mouse);
+        /* Wheel output waits outside the report; take this report's share. */
+        mouse_wheel_flush(&mouse);
         pointing_device_set_report(mouse);
         bool send_report = pointing_device_send();
         mouse_send_flag  = false;
