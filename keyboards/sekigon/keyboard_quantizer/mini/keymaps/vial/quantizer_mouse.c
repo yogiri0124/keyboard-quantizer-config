@@ -62,8 +62,6 @@ extern bool          mouse_send_flag;
 #define CURSOR_SCALE_STEP 2
 #define CURSOR_RECOIL_PREV 64
 #define CURSOR_RECOIL_MAX 8
-#define HID8_MIN (-127)
-#define HID8_MAX 127
 #define CURSOR_SCALE_UNIT 16
 #define CONFIG_SAVE_DEBOUNCE_MS 750
 
@@ -272,10 +270,6 @@ static int32_t clamp_i32(int32_t value, int32_t lo, int32_t hi) {
 
 static uint8_t clamp_u8(int16_t value, uint8_t lo, uint8_t hi) {
     return (uint8_t)clamp_i32(value, lo, hi);
-}
-
-static int8_t clamp_hid8(int32_t value) {
-    return (int8_t)clamp_i32(value, HID8_MIN, HID8_MAX);
 }
 
 static mouse_xy_report_t clamp_xy(int32_t value) {
