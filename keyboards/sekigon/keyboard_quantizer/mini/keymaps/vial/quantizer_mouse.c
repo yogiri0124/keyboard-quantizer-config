@@ -1419,20 +1419,22 @@ static void send_wheel_now(void) {
  * a modifier (LCTL(WH_UP)), macros, and MS_* keys. The wheel gets the host
  * multiplier like every other wheel source, and the report keeps the drag-lock
  * buttons. Sent right away, because a modified key releases its modifier just
- * after this returns. */
+ * after this returns.
+ *
+ * Only this report's own motion and wheel go out here. Ordinary scrolling and
+ * ball motion waiting for the regular send stay where they are: this can run
+ * with a modifier down, and inside the matrix scan before a button change
+ * from the same device report is applied. */
 void mousekey_host_send(report_mouse_t *report) {
     if (report == NULL) {
         return;
     }
-    report_mouse_t mouse = pointing_device_get_report();
-    mouse.x              = clamp_xy((int32_t)mouse.x + report->x);
-    mouse.y              = clamp_xy((int32_t)mouse.y + report->y);
     scroll_out_detents(report->v, true, true);
     scroll_out_detents(report->h, false, true);
+    report_mouse_t mouse = {.x = report->x, .y = report->y};
     mouse_merge_buttons(&mouse);
-    mouse_wheel_flush(&mouse);
-    pointing_device_set_report(mouse);
-    pointing_device_send();
+    scroll_out_flush_urgent(&mouse);
+    host_mouse_send(&mouse);
     send_wheel_now();
 }
 

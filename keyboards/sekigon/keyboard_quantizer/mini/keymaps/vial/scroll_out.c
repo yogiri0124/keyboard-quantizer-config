@@ -88,9 +88,12 @@ bool scroll_out_urgent_pending(void) {
 static void flush_from(int32_t *q, report_mouse_t *mouse) {
     int8_t sent[2];
     for (int a = 0; a < 2; a++) {
-        int32_t c = counts(q, a);
+        /* One reading of the multiplier for both steps: the host can change
+         * it from the USB interrupt at any time. */
+        int32_t m = multiplier(a);
+        int32_t c = (int32_t)((int64_t)q[a] * m / QUEUE_PER_DETENT);
         c         = c > 127 ? 127 : (c < -127 ? -127 : c);
-        q[a] -= (int32_t)((int64_t)c * QUEUE_PER_DETENT / multiplier(a));
+        q[a] -= (int32_t)((int64_t)c * QUEUE_PER_DETENT / m);
         sent[a] = (int8_t)c;
     }
     mouse->v = sent[AXIS_V];
