@@ -65,8 +65,6 @@ extern bool          mouse_send_flag;
 #define HID8_MIN (-127)
 #define HID8_MAX 127
 #define CURSOR_SCALE_UNIT 16
-#define MAGIC_TAP_SLACK_MS 40
-#define MAGIC_TAP_LIMIT_MAX_MS 200
 #define CONFIG_SAVE_DEBOUNCE_MS 750
 
 _Static_assert(SCROLL_DIV_MIN == 8 && SCROLL_DIV_MAX == 80, "vial.json scroll divisor range must match");
@@ -128,9 +126,9 @@ static bool          skip_mode_oneshot_cancel    = false;
 static bool          config_dirty                = false;
 static uint16_t      config_dirty_ms             = 0;
 
-/* Depth of the magic-hold timestamp stack. Two is already an unusual keymap;
- * beyond this the oldest timestamp is reused, which only affects the
- * tap-vs-hold decision, never the hold count itself. */
+/* Depth of the magic-hold press stack. Two is already an unusual keymap;
+ * beyond this the oldest entry is reused, which only affects the tap-vs-hold
+ * decision, never the hold count itself. */
 #define MODE_MAGIC_HOLD_MAX 4
 
 typedef enum {
@@ -141,9 +139,9 @@ typedef enum {
 } mouse_mode_id_t;
 
 /* One latch set per mode, so the three modes cannot drift apart the way nine
- * separately named globals did. down_ms is per latch on purpose: two tap-dance
- * mode keys can overlap, and one shared timestamp made the release of one key
- * read the press time of the other and take the wrong tap-vs-hold branch. */
+ * separately named globals did. The press pass is per latch on purpose: two
+ * tap-dance mode keys can overlap, and one shared value made the release of
+ * one key read the press of the other and take the wrong tap-vs-hold branch. */
 typedef struct {
     /* Several keys can hold the same mode at once: two physical keys on
      * different layers, or a physical key plus a tap dance. A single bool made
@@ -156,13 +154,13 @@ typedef struct {
     bool     toggle;       /* D.SCR / T.GES / T.SLO latched */
     bool     oneshot;      /* O.SCR / O.GES / O.SLO armed */
     bool     toggle_magic; /* the toggle came from a tap dance TAP */
-    /* One press time per magic holder, popped last-in-first-out. A single
-     * shared timestamp let a later press overwrite the one an earlier holder
+    /* One press pass per magic holder, popped last-in-first-out. A single
+     * shared value let a later press overwrite the one an earlier holder
      * still needed for its own tap-vs-hold decision. Magic events carry no
      * identity (every tap dance and combo reports the same key position), so
      * LIFO is the only pairing available; it is also the order holds nest in. */
-    uint16_t hold_magic_ms[MODE_MAGIC_HOLD_MAX];
-    uint16_t toggle_down_ms;
+    uint16_t hold_magic_seq[MODE_MAGIC_HOLD_MAX];
+    uint16_t toggle_down_seq;
 } mouse_mode_state_t;
 
 static mouse_mode_state_t mode_state[MOUSE_MODE_COUNT];
@@ -180,7 +178,7 @@ static struct {
     bool     latched;    /* a tap dance TAP turned it on until the next key */
     uint8_t  hold_phys;  /* physical S.SCR keys held */
     uint8_t  hold_magic; /* tap dances or combos holding it */
-    uint16_t hold_magic_ms[MODE_MAGIC_HOLD_MAX];
+    uint16_t hold_magic_seq[MODE_MAGIC_HOLD_MAX];
 } slow_scroll;
 
 static bool slow_scroll_is_active(void) {
@@ -502,7 +500,9 @@ static bool process_mod_lock_keycode(uint16_t keycode, bool pressed) {
 }
 
 static void note_physical_mod(uint16_t keycode, bool pressed) {
-    mod_lock_t *entry = mod_lock_for_phys(keycode);
+    /* With a Magic swap on (Alt/GUI, Ctrl/GUI), the key sends the swapped
+     * modifier; match the lock of the modifier it really sends. */
+    mod_lock_t *entry = mod_lock_for_phys(IS_MODIFIER_KEYCODE(keycode) ? keycode_config((uint8_t)keycode) : keycode);
     if (entry == NULL) {
         return;
     }
@@ -609,14 +609,18 @@ static bool is_mouse_settings_key(uint16_t keycode) {
     }
 }
 
-/* A tap dance or combo emits press and release back to back for a TAP and
- * holds them apart for a HOLD, so the gap decides which one happened. */
-static bool magic_release_is_tap(uint16_t down_ms) {
-    uint32_t limit = (uint32_t)MAGIC_TAP_SLACK_MS + (uint32_t)QS_tap_code_delay;
-    if (limit > MAGIC_TAP_LIMIT_MAX_MS) {
-        limit = MAGIC_TAP_LIMIT_MAX_MS;
-    }
-    return timer_since(down_ms) <= (uint16_t)limit;
+/* Main-loop passes, counted in mouse_housekeeping(). A tap dance TAP (or a
+ * combo tapped by a macro) presses and releases its key within one pass; a
+ * HOLD releases in a later pass, however soon after it was recognised. Time
+ * could not tell them apart when the key was let go right after the hold. */
+static uint16_t loop_seq;
+
+static uint16_t magic_now(void) {
+    return loop_seq;
+}
+
+static bool magic_release_is_tap(uint16_t down_seq) {
+    return down_seq == loop_seq;
 }
 
 static bool is_layer_switch_keycode(uint16_t keycode) {
@@ -770,7 +774,8 @@ static void cancel_magic_toggles(void) {
 }
 
 /* SCR / GES / SLOW: momentary while held. A tap dance TAP of the same key ends
- * as a oneshot instead; the gap between press and release decides which. */
+ * as a oneshot instead; whether press and release came in the same main-loop
+ * pass decides which (see magic_release_is_tap()). */
 static void mode_hold_key(mouse_mode_id_t id, bool pressed, bool magic) {
     mouse_mode_state_t *st       = &mode_state[id];
     bool                was_held = mode_held(st);
@@ -789,7 +794,7 @@ static void mode_hold_key(mouse_mode_id_t id, bool pressed, bool magic) {
          * anyway, since a hold never clears it and a tap re-arms it below. */
         if (st->hold_magic < UINT8_MAX) {
             if (st->hold_magic < MODE_MAGIC_HOLD_MAX) {
-                st->hold_magic_ms[st->hold_magic] = timer_now();
+                st->hold_magic_seq[st->hold_magic] = magic_now();
             }
             st->hold_magic++;
         }
@@ -797,7 +802,7 @@ static void mode_hold_key(mouse_mode_id_t id, bool pressed, bool magic) {
         st->hold_magic--;
         uint8_t slot = st->hold_magic < MODE_MAGIC_HOLD_MAX ? st->hold_magic : (uint8_t)(MODE_MAGIC_HOLD_MAX - 1);
         /* Only the last holder letting go can turn the hold into a oneshot. */
-        if (st->hold_magic == 0 && magic_release_is_tap(st->hold_magic_ms[slot])) {
+        if (st->hold_magic == 0 && magic_release_is_tap(st->hold_magic_seq[slot])) {
             /* mode_oneshot_enter() settles every mode and enters this one. */
             mode_oneshot_enter(id);
             return;
@@ -833,10 +838,10 @@ static void mode_toggle_key(mouse_mode_id_t id, bool pressed, bool magic) {
         return;
     }
     if (pressed) {
-        st->toggle_down_ms = timer_now();
+        st->toggle_down_seq = magic_now();
         st->toggle_magic   = false;
     } else {
-        st->toggle_magic = st->toggle && magic_release_is_tap(st->toggle_down_ms);
+        st->toggle_magic = st->toggle && magic_release_is_tap(st->toggle_down_seq);
     }
 }
 
@@ -871,7 +876,7 @@ static void slow_scroll_key(bool pressed, bool magic) {
     } else if (pressed) {
         if (slow_scroll.hold_magic < UINT8_MAX) {
             if (slow_scroll.hold_magic < MODE_MAGIC_HOLD_MAX) {
-                slow_scroll.hold_magic_ms[slow_scroll.hold_magic] = timer_now();
+                slow_scroll.hold_magic_seq[slow_scroll.hold_magic] = magic_now();
             }
             slow_scroll.hold_magic++;
         }
@@ -879,7 +884,7 @@ static void slow_scroll_key(bool pressed, bool magic) {
         slow_scroll.hold_magic--;
         uint8_t slot = slow_scroll.hold_magic < MODE_MAGIC_HOLD_MAX ? slow_scroll.hold_magic
                                                                    : (uint8_t)(MODE_MAGIC_HOLD_MAX - 1);
-        if (magic_release_is_tap(slow_scroll.hold_magic_ms[slot])) {
+        if (magic_release_is_tap(slow_scroll.hold_magic_seq[slot])) {
             slow_scroll.latched = !slow_scroll.latched;
         }
     }
@@ -1139,7 +1144,8 @@ static bool slot_has_user_key(uint8_t layer, uint16_t identity) {
 }
 
 /* Gesture mode is the default on a layer that maps the orange slots but leaves
- * the four ball-direction cells alone: there the ball has no other job. */
+ * the four ball-direction cells (MS_UP/DOWN/LEFT/RIGHT) empty. Those cells are
+ * never fired by the ball; mapping any of them only turns this default off. */
 static bool compute_gesture_default_from_keymap(uint8_t layer) {
     static const uint16_t ball_usages[] = {KC_MS_UP, KC_MS_DOWN, KC_MS_LEFT, KC_MS_RIGHT};
     bool                  gesture_mapped = false;
@@ -1521,7 +1527,7 @@ static void add_wheel(int16_t val, bool vertical) {
 #ifndef NO_ACTION_ONESHOT
     mods |= get_oneshot_mods();
 #endif
-    scroll_out_detents(clamp_hid8(val), vertical, mods != 0);
+    scroll_out_detents(val, vertical, mods != 0);
     if (mods != 0) {
         send_wheel_now(false);
     } else {
@@ -1535,14 +1541,15 @@ static void emit_analog_wheel(int16_t move, bool vertical, bool positive_key) {
         /* Identity-tap release: analog already queued on press. */
         return;
     }
-    int8_t mag = clamp_hid8(abs32(move));
+    int16_t mag = (int16_t)clamp_i32(abs32(move), 0, INT16_MAX);
     add_wheel(positive_key ? mag : (int16_t)(-mag), vertical);
 }
 
-/* Consuming WH_* keeps drag locks alive but also bypasses mousekey_on(), which
- * is where QMK's wheel auto-repeat lives. Run the same repeat here off the same
- * QMK Settings values mousekey_task() uses, so the Vial sliders still apply.
- * One wheel key repeats at a time; a new press takes over. */
+/* Consuming WH_* bypasses mousekey_on(), which is where QMK's wheel
+ * auto-repeat lives, so the repeat is done here: one detent per step, timed by
+ * the QMK Settings wheel delay and interval (the Vial sliders). The wheel
+ * speed and acceleration settings are not used. One wheel key repeats at a
+ * time; a new press takes over. */
 /* The slot mouse_scan_end() routed the current batch to. The batch sign and
  * this slot always agree, so comparing the slot against the keycode that came
  * back tells remapping apart from routing: only a user remap to the opposite
@@ -1854,6 +1861,7 @@ void post_process_record_mouse(uint16_t keycode, keyrecord_t *record) {
 }
 
 void mouse_housekeeping(void) {
+    loop_seq++;
     apply_mod_locks();
     mouse_config_task();
     /* The host may switch the wheel multiplier at any time, which can make a

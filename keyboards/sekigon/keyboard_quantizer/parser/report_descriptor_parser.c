@@ -31,7 +31,7 @@ hid_device_t const *get_hid_device_def(uint8_t interface) {
   return NULL;
 }
 
-bool hid_interface_is_mouse(uint8_t interface) {
+static bool hid_interface_has(uint8_t interface, uint16_t page_usage) {
   hid_device_t const *device = get_hid_device_def(interface);
   if (device == NULL) {
     return false;
@@ -39,12 +39,20 @@ bool hid_interface_is_mouse(uint8_t interface) {
   hid_id_collection_t const *collection = device->id_collection;
   while (collection != NULL) {
     uint16_t usage_id = (uint16_t)((collection->usage_page << 8) | collection->usage);
-    if (usage_id == 0x0102) {
+    if (usage_id == page_usage) {
       return true;
     }
     collection = collection->next;
   }
   return false;
+}
+
+bool hid_interface_is_mouse(uint8_t interface) {
+  return hid_interface_has(interface, 0x0102);
+}
+
+bool hid_interface_is_keyboard(uint8_t interface) {
+  return hid_interface_has(interface, 0x0106);
 }
 
 bool hid_has_mouse(void) {
@@ -157,6 +165,43 @@ static void link_id_collection(hid_device_t *hid_device, hid_id_collection_t *co
   }
 }
 
+/* Makes *collection the list that report ID `id` owns. One Application
+ * collection often holds several Report IDs (buttons+xy vs wheel); each ID
+ * keeps its own list so a short wheel packet is not parsed as "all buttons
+ * released". A list with no fields yet just takes the ID. */
+static void select_id_list(hid_device_t *hid_device, hid_id_collection_t **collection,
+                           hid_report_member_t **current_member, uint8_t id) {
+  hid_id_collection_t *cur = *collection;
+  /* ID 0 means "no ID", which cannot follow IDs in one descriptor. */
+  if (cur == NULL || cur->id == id || id == 0) {
+    return;
+  }
+  if (id != 0 && cur->report_def_start != NULL && cur->id != 0) {
+    link_id_collection(hid_device, cur);
+    hid_id_collection_t *existing = find_linked_id_collection(hid_device, id);
+    if (existing != NULL) {
+      /* Seen before: keep appending to the list this ID already owns.
+       * current_member = NULL makes append_report_member() walk to its tail
+       * instead of splicing after the previous list. */
+      *collection     = existing;
+      *current_member = NULL;
+      return;
+    }
+    hid_id_collection_t *next = find_empty_id_idx_begin();
+    if (next == NULL || next == cur) {
+      return; /* out of lists: keep filling the current one */
+    }
+    memset(next, 0, sizeof(*next));
+    next->usage      = cur->usage;
+    next->usage_page = cur->usage_page;
+    next->id         = id;
+    *collection      = next;
+    *current_member  = NULL;
+    return;
+  }
+  cur->id = id;
+}
+
 static void delete_hid_id_collection(hid_id_collection_t *collection) {
   if (collection == NULL) {
     return;
@@ -211,7 +256,6 @@ static bool get_next_item(uint8_t const **buf, uint16_t *const len,
 
   item->prefix = data[0];
   item->tag = (data[0] >> 4) & 0x0F;
-  item->type = (data[0] >> 2) & 0x03;
   item->size = (data[0]) & 0x03;
 
   if (item->tag == 0x0F) {
@@ -317,6 +361,8 @@ bool parse_report_descriptor(uint8_t interface, uint8_t const *desc,
 
         current_collection->usage = top_usage;
         current_collection->usage_page = top_usage_page;
+        /* A Report ID given before the Collection applies to it. */
+        current_collection->id = member.global.report_id;
         current_member = NULL;
       }
       reset_local_state(&member, usage_table, sizeof(usage_table), &usage_table_idx);
@@ -346,35 +392,8 @@ bool parse_report_descriptor(uint8_t interface, uint8_t const *desc,
 
     case HID_RI_REPORT_ID(0):
       dprintf("Report id %u\n", (unsigned)item.raw);
-
-      if (current_collection != NULL) {
-        /* One Application collection often contains several Report IDs
-         * (buttons+xy vs wheel). Keep each ID as its own list so a short
-         * wheel packet is not parsed as "all buttons released". */
-        if (item.raw != 0 && current_collection->report_def_start != NULL &&
-            current_collection->id != 0 && current_collection->id != (uint8_t)item.raw) {
-          hid_id_collection_t *prev = current_collection;
-          link_id_collection(hid_device, prev);
-          hid_id_collection_t *existing = find_linked_id_collection(hid_device, (uint8_t)item.raw);
-          if (existing != NULL) {
-            /* Seen before: keep appending to the list this ID already owns.
-             * current_member = NULL makes append_report_member() walk to its
-             * tail instead of splicing after the previous list. */
-            current_collection = existing;
-            current_member     = NULL;
-          } else {
-            hid_id_collection_t *next = find_empty_id_idx_begin();
-            if (next != NULL && next != prev) {
-              memset(next, 0, sizeof(*next));
-              next->usage        = prev->usage;
-              next->usage_page   = prev->usage_page;
-              current_collection = next;
-              current_member     = NULL;
-            }
-          }
-        }
-        current_collection->id = (uint8_t)item.raw;
-      }
+      member.global.report_id = (uint8_t)item.raw;
+      select_id_list(hid_device, &current_collection, &current_member, member.global.report_id);
       break;
 
     case HID_RI_USAGE_PAGE(0):
@@ -467,6 +486,9 @@ bool parse_report_descriptor(uint8_t interface, uint8_t const *desc,
       dprintf("Input %u\n", (unsigned)item.raw);
       // apply member
       usage_table_idx = usage_table_idx > 0 ? usage_table_idx : 1;
+      if (current_collection != NULL) {
+        select_id_list(hid_device, &current_collection, &current_member, member.global.report_id);
+      }
       if (current_collection == NULL) {
         dprintln("Input with no collection");
       } else if (member.global.report_count == 0 || member.global.report_size == 0) {
@@ -556,10 +578,8 @@ bool parse_report_descriptor(uint8_t interface, uint8_t const *desc,
     current_collection = NULL;
   }
 
-  if (hid_device == NULL || hid_device->id_collection == NULL) {
-    if (hid_device != NULL) {
-      memset(hid_device, 0, sizeof(*hid_device));
-    }
+  if (hid_device->id_collection == NULL) {
+    memset(hid_device, 0, sizeof(*hid_device));
     return false;
   }
 

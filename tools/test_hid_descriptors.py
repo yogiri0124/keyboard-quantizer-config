@@ -12,7 +12,8 @@ def H(text):
     return bytes.fromhex(text.replace(" ", ""))
 
 
-# A mouse with a Resolution Multiplier feature, the shape Step 3 adds.
+# A mouse with one Resolution Multiplier shared by both wheels (an earlier
+# layout, kept as a valid-descriptor case).
 RESMUL = H(
     "05 01 09 02 a1 01 85 02"
     "09 01 a1 00"
@@ -26,6 +27,21 @@ RESMUL = H(
     "b4"  # pop
     "75 06 b1 01"  # 6-bit feature padding
     "c0"
+    "c0 c0"
+)
+
+# The layout patches/0002 builds: each wheel in its own Logical collection
+# with a 2-bit multiplier (physical 1..120), padded to a byte after the pan.
+CURRENT = H(
+    "05 01 09 02 a1 01 85 02"
+    "09 01 a1 00"
+    "05 09 19 01 29 08 15 00 25 01 95 08 75 01 81 02"
+    "05 01 09 30 09 31 16 01 80 26 ff 7f 95 02 75 10 81 06"
+    "a1 02 09 48 15 00 25 01 35 01 45 78 95 01 75 02 b1 02 35 00 45 00"
+    "09 38 15 81 25 7f 95 01 75 08 81 06 c0"
+    "a1 02 09 48 15 00 25 01 35 01 45 78 95 01 75 02 b1 02 35 00 45 00"
+    "75 04 b1 01"
+    "05 0c 0a 38 02 15 81 25 7f 95 01 75 08 81 06 c0"
     "c0 c0"
 )
 
@@ -59,6 +75,8 @@ CASES = [
     ("field spanning 5 bytes", H("05 01 09 02 a1 01 85 01 95 01 75 01 81 01 05 01 09 30 15 00 27 ff ff ff ff 95 01 75 20 81 02 95 01 75 07 81 01 c0"), True),
     ("collection left open", RESMUL[:-1], True),
     ("resolution multiplier", RESMUL, False),
+    ("resolution multiplier per wheel (current)", CURRENT, False),
+    ("per-wheel multiplier without its padding", CURRENT.replace(H("75 04 b1 01"), b""), True),
 ]
 
 

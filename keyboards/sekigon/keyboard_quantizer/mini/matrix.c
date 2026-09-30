@@ -56,6 +56,8 @@ static volatile uint8_t hid_mount_head;
 static volatile uint8_t hid_mount_tail;
 static volatile uint8_t hid_if_epoch[256];
 static bool             hid_if_mouse[256];
+static bool             hid_if_keyboard[256];
+static bool             hid_keyboard_need_release;
 static uint8_t          hid_mounted_count;
 static volatile bool    hid_disconnect_flag;
 static volatile bool    hid_mouse_lost_flag;
@@ -157,6 +159,12 @@ static void hid_note_unmount(uint8_t if_id, uint8_t epoch) {
         hid_mouse_need_reset = true;
         hid_if_mouse[if_id]  = false;
     }
+    /* Its keys would otherwise stay down while another device (a mouse on
+     * the same hub) keeps the Quantizer connected. */
+    if (hid_if_keyboard[if_id]) {
+        hid_keyboard_need_release = true;
+        hid_if_keyboard[if_id]    = false;
+    }
     if (epoch == hid_if_epoch[if_id]) {
         delete_hid_device(if_id);
     }
@@ -184,7 +192,8 @@ static void hid_unmount_drain(void) {
 
 static void hid_parse_mounted_descriptor(uint8_t if_id, uint8_t const* desc, uint16_t len) {
     parse_report_descriptor(if_id, desc, len);
-    hid_if_mouse[if_id] = hid_interface_is_mouse(if_id);
+    hid_if_mouse[if_id]    = hid_interface_is_mouse(if_id);
+    hid_if_keyboard[if_id] = hid_interface_is_keyboard(if_id);
 }
 
 static void hid_mount_enqueue(uint8_t if_id, uint8_t const* desc, uint16_t len) {
@@ -254,11 +263,23 @@ static void hid_mount_drain(void) {
     }
 }
 
+/* QMK compares the matrix once per scan, so a key or button that went down
+ * and up again within one scan would never be seen. Once a report has changed
+ * the matrix from where this scan started, the rest waits for the next scan.
+ * Reports that change nothing in it (cursor motion, a held key repeated) keep
+ * being drained, so motion is not held back. */
+static matrix_row_t scan_start[MATRIX_ROWS];
+
+static bool matrix_moved(void) {
+    return memcmp(scan_start, matrix_dest, sizeof(scan_start)) != 0;
+}
+
 /* Drains the RX ring up to `end`, which the caller snapshots from hid_rx_tail
- * so core1 cannot extend the run mid-drain. Returns whether the matrix moved. */
+ * so core1 cannot extend the run mid-drain, stopping early once the matrix
+ * moved. Returns whether a report was parsed that reports a change. */
 static bool hid_rx_drain_to(uint8_t end) {
     bool changed = false;
-    while (hid_rx_head != end) {
+    while (hid_rx_head != end && !matrix_moved()) {
         uint8_t h = hid_rx_head;
         __compiler_memory_barrier();
         uint8_t if_id = hid_rx_inst[h];
@@ -308,17 +329,28 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
          * later parse gap to look like "mouse gone". */
         hid_mouse_lost_flag = false;
     }
+    if (hid_keyboard_need_release) {
+        /* A keyboard went away: release its keys like an empty report would
+         * (mouse buttons on the shared rows are put back by the hook). */
+        hid_keyboard_need_release = false;
+        keyboard_parse_result_t none = {0};
+        keyboard_report_hook(&none);
+        matrix_has_changed = true;
+    }
+    memcpy(scan_start, current_matrix, sizeof(scan_start));
 
     /* Relative mouse deltas must not be overwritten. Drain every queued report,
      * but stop at the tail as it was on entry: the overflow slot was filled
      * while the ring was full, so it belongs after those and before anything
      * core1 enqueues once draining frees space. Draining the whole ring first
-     * would let a newer button report be applied before an older one. */
-    if (hid_rx_drain_to(hid_rx_tail)) {
+     * would let a newer button report be applied before an older one. The
+     * overflow slot waits while ring entries before it are still pending. */
+    uint8_t first_end = hid_rx_tail;
+    if (hid_rx_drain_to(first_end)) {
         matrix_has_changed = true;
     }
     uint16_t overflow_seq = hid_rx_overflow_seq;
-    if ((overflow_seq & 1u) == 0 && overflow_seq != hid_rx_overflow_taken) {
+    if (hid_rx_head == first_end && !matrix_moved() && (overflow_seq & 1u) == 0 && overflow_seq != hid_rx_overflow_taken) {
         uint8_t buf[64];
         uint8_t if_id;
         uint8_t epoch;

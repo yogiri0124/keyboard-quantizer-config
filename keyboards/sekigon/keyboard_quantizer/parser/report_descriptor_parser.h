@@ -20,6 +20,9 @@ typedef struct struct_hid_report_member {
     int32_t logical_minimum;
     uint8_t report_size;
     uint8_t report_count;
+    /* Report ID is a Global item too (HID 1.11 6.2.2.7): it may come before
+     * the Collection it applies to, and Push/Pop save and restore it. */
+    uint8_t report_id;
   } global;
 
   hid_report_local_member_t local;
@@ -35,7 +38,6 @@ typedef struct struct_hid_report_member {
 typedef struct {
   uint8_t prefix;
   uint8_t tag;
-  uint8_t type;
   uint8_t size;     /* short item: data byte count (0, 1, 2 or 4) */
   int32_t data;     /* raw, sign extended from size */
   uint32_t raw;     /* as encoded, unsigned */
@@ -66,6 +68,7 @@ void print_hid_device(uint8_t interface);
 void print_hid_devices_cli(void);
 bool hid_has_mouse(void);
 bool hid_interface_is_mouse(uint8_t interface);
+bool hid_interface_is_keyboard(uint8_t interface);
 
 hid_device_t const * get_hid_device_def(uint8_t interface);
 

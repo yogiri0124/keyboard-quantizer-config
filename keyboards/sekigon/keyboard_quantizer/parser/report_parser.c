@@ -110,8 +110,13 @@ static void keyboard_report_parser(hid_report_member_t const *member,
             }
             bit_idx++;
           }
-          if (raw != 0) {
-            uint8_t keycode = (uint8_t)(raw + member->local.usage_minimum);
+          /* An array value is an index into the usage range:
+           * usage = value - Logical Minimum + Usage Minimum. Values outside
+           * the logical range mean "no key". */
+          int32_t usage = (int32_t)raw - member->global.logical_minimum + member->local.usage_minimum;
+          if (raw >= member->global.logical_minimum && raw <= member->global.logical_maximum && usage > 0 &&
+              usage <= 0xFF) {
+            uint8_t keycode = (uint8_t)usage;
             result.bits[keycode >> 3] |= (uint8_t)(1u << (keycode & 7));
           }
         }
@@ -256,6 +261,17 @@ static void mouse_report_parser(hid_report_member_t const *member, uint8_t const
   mouse_report_hook(&result);
 }
 
+static uint32_t read_bits(uint8_t const *data, uint8_t len, uint16_t *bit_idx, uint8_t size) {
+  uint32_t value = 0;
+  for (uint8_t b = 0; b < size; b++) {
+    if (hid_report_bit(data, len, *bit_idx) && b < 32) {
+      value |= (1u << b);
+    }
+    (*bit_idx)++;
+  }
+  return value;
+}
+
 static void extra_key_report_parser(hid_report_member_t const *member, uint8_t const *data,
                                     uint8_t len, void (*hook)(uint16_t)) {
   uint16_t bit_idx = 0;
@@ -273,6 +289,24 @@ static void extra_key_report_parser(hid_report_member_t const *member, uint8_t c
           hook((uint16_t)(member->local.usage_minimum + idx));
         }
         bit_idx++;
+      }
+      member = member->next;
+      continue;
+    }
+
+    /* Array form: every element is its own usage index (two keys held give
+     * two elements); parse_value() would pack them all into one number. */
+    if (member->global.report_size > 1 && member->global.report_count > 1) {
+      for (uint8_t idx = 0; idx < member->global.report_count; idx++) {
+        int32_t raw   = (int32_t)read_bits(data, len, &bit_idx, member->global.report_size);
+        int32_t usage = raw;
+        if (member->local.usage_maximum > member->local.usage_minimum) {
+          usage = raw - member->global.logical_minimum + member->local.usage_minimum;
+        }
+        if (raw >= member->global.logical_minimum && raw <= member->global.logical_maximum && usage > 0 &&
+            usage <= 0xFFFF) {
+          hook((uint16_t)usage);
+        }
       }
       member = member->next;
       continue;

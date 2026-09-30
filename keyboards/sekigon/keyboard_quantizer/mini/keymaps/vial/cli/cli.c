@@ -18,8 +18,6 @@ extern void tusb_print_debug_buffer(void);
 #define CLI_BUFFER_SIZE 1024
 static CLI_UINT           cliBuffer[BYTES_TO_CLI_UINTS(CLI_BUFFER_SIZE)];
 static EmbeddedCli       *cli             = NULL;
-static bool               cli_initialized = false;
-static EmbeddedCliConfig *config;
 
 void virtser_recv(uint8_t c) {
     if (cli != NULL) {
@@ -172,7 +170,7 @@ static void onHid(EmbeddedCli *cli, char *args, void *context) {
 }
 
 void cli_init(void) {
-    config                     = embeddedCliDefaultConfig();
+    EmbeddedCliConfig *config  = embeddedCliDefaultConfig();
     config->cliBuffer          = cliBuffer;
     config->cliBufferSize      = CLI_BUFFER_SIZE;
     config->enableAutoComplete = false;
@@ -180,7 +178,6 @@ void cli_init(void) {
     config->maxBindingCount    = 16;
     cli = embeddedCliNew(config);
     if (cli == NULL) {
-        cli_initialized = false;
         return;
     }
     cli->writeChar = writeChar;
@@ -204,11 +201,10 @@ void cli_init(void) {
     embeddedCliAddBinding(
         cli, (CliCommandBinding){"hid", "HID report counts; hid desc", true,
                                  NULL, onHid});
-    cli_initialized = true;
 }
 
 void cli_exec(void) {
-    if (cli_initialized) {
+    if (cli != NULL) {
         embeddedCliProcess(cli);
     }
 

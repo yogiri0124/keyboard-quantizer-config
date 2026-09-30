@@ -63,6 +63,7 @@ QMK 本体側の変更は `patches/0002`（記述子と倍率の Feature 要求�
 git clone --recurse-submodules https://github.com/sekigon-gonnoc/vial-qmk.git
 cd vial-qmk
 git checkout <upstream.env の UPSTREAM_REF>
+git submodule update --init --recursive
 cp -a /path/to/keyboard-quantizer-config/keyboards /path/to/keyboard-quantizer-config/util .
 for p in /path/to/keyboard-quantizer-config/patches/*.patch; do git apply "$p"; done
 make sekigon/keyboard_quantizer/mini:vial

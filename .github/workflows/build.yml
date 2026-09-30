@@ -34,6 +34,14 @@ jobs:
           # Comments and blank lines are not valid in $GITHUB_ENV.
           grep -E '^[A-Za-z_][A-Za-z0-9_]*=' config/upstream.env | tr -d '\r' >> "$GITHUB_ENV"
 
+      - name: Test the HID parser on the host
+        # The Quantizer's descriptor/report parser, compiled for the runner
+        # and fed known descriptors (tools/parser_test).
+        working-directory: config
+        run: |
+          cc -std=gnu11 -Wall -Werror -I tools/parser_test/include -o "$RUNNER_TEMP/parser_test" tools/parser_test/parser_test.c
+          "$RUNNER_TEMP/parser_test"
+
       - name: Checkout upstream QMK tree
         run: |
           git init qmk
