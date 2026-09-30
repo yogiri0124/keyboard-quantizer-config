@@ -17,14 +17,16 @@
 
 #include "report.h"
 
-/* Whole detents from a wheel, a WH_* key or a macro. urgent: sent before
- * anything else and never netted against other scrolling (a modifier is
- * down, so it must reach the host while it still is). */
-void scroll_out_detents(int16_t detents, bool vertical, bool urgent);
+/* Whole detents from a wheel, a WH_* key or a macro. now: urgent, sent
+ * before anything else and never netted against other scrolling (a modifier
+ * is down, so it must reach the host while it still is). */
+void scroll_out_detents(int16_t detents, bool vertical, bool now);
 /* Ball scroll in raw ball counts (h right, v up); counts_per_detent of them
  * make one detent. The division remainder carries over, so nothing is lost. */
 void scroll_out_ball(int32_t h, int32_t v, int32_t counts_per_detent);
 
+/* Host counts per detent: 1 until the host enables the multiplier. */
+int32_t scroll_out_multiplier(bool vertical);
 /* At least one host count is waiting. */
 bool scroll_out_pending(void);
 /* Moves up to ±127 counts per axis into the report about to be sent; urgent

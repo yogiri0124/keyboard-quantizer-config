@@ -18,9 +18,7 @@
 #include "quantizer_mouse.h"
 #include "scroll_out.h"
 #include "via.h"
-#ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
-#    include "usb_main.h"
-#endif
+#include "usb_main.h" /* USB endpoints: this board is ChibiOS only */
 
 enum via_mouse_value {
     id_mouse_scroll_div         = 1,
@@ -280,17 +278,6 @@ static uint8_t clamp_u8(int16_t value, uint8_t lo, uint8_t hi) {
 
 static int8_t clamp_hid8(int32_t value) {
     return (int8_t)clamp_i32(value, HID8_MIN, HID8_MAX);
-}
-
-/* Host wheel counts per detent: 1 until Windows/Linux turn on the resolution
- * multiplier (patches/0002), then MOUSE_WHEEL_RESOLUTION_MULTIPLIER. */
-static int32_t wheel_multiplier(bool vertical) {
-#ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
-    return usb_mouse_wheel_multiplier(vertical);
-#else
-    (void)vertical;
-    return 1;
-#endif
 }
 
 static mouse_xy_report_t clamp_xy(int32_t value) {
@@ -1400,12 +1387,10 @@ void pointing_device_keycode_handler(uint16_t keycode, bool pressed) {
 static uint8_t last_sent_buttons = 0;
 
 static void wait_mouse_endpoint_idle(void) {
-#ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
     extern usb_endpoint_in_t usb_endpoints_in[USB_ENDPOINT_IN_COUNT];
     uint16_t                 start = timer_read();
     while (!usb_endpoint_in_is_inactive(&usb_endpoints_in[USB_ENDPOINT_IN_MOUSE]) && timer_elapsed(start) < 10) {
     }
-#endif
 }
 
 /* Sends the urgent wheel output (it came with a modifier) now, report after
@@ -1974,7 +1959,7 @@ void hid_cli_print(void) {
      * and wheel_kc_for_delta() is where that is corrected. */
     printf("wheel %d  pan %d  (positive = up / right)\n", (int)hid_stats.last_wheel, (int)hid_stats.last_pan);
     /* What the PC asked for: x1 until Windows/Linux enable high resolution. */
-    printf("host wheel x%d  pan x%d\n", (int)wheel_multiplier(true), (int)wheel_multiplier(false));
+    printf("host wheel x%d  pan x%d\n", (int)scroll_out_multiplier(true), (int)scroll_out_multiplier(false));
 }
 
 void hid_cli_print_desc(void) {

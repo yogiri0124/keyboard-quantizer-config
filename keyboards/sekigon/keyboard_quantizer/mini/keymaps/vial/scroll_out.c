@@ -27,14 +27,17 @@ static void add(int32_t *q, int64_t amount) {
     *q        = (int32_t)(v > QUEUE_LIMIT ? QUEUE_LIMIT : (v < -QUEUE_LIMIT ? -QUEUE_LIMIT : v));
 }
 
-/* Host counts per detent: 1 until the host enables the multiplier. */
-static int32_t multiplier(int axis) {
+int32_t scroll_out_multiplier(bool vertical) {
 #ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
-    return usb_mouse_wheel_multiplier(axis == AXIS_V);
+    return usb_mouse_wheel_multiplier(vertical);
 #else
-    (void)axis;
+    (void)vertical;
     return 1;
 #endif
+}
+
+static int32_t multiplier(int axis) {
+    return scroll_out_multiplier(axis == AXIS_V);
 }
 
 /* Whole host counts in q for an axis, toward zero. Exact: QUEUE_PER_DETENT
