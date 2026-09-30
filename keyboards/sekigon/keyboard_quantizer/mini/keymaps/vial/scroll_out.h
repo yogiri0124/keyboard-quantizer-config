@@ -27,7 +27,12 @@ void scroll_out_ball(int32_t h, int32_t v, int32_t counts_per_detent);
 
 /* At least one host count is waiting. */
 bool scroll_out_pending(void);
-/* Moves up to ±127 counts per axis into the report about to be sent. */
+/* Moves up to ±127 counts per axis into the report about to be sent; urgent
+ * output first, on its own. */
 void scroll_out_flush(report_mouse_t *mouse);
+/* Urgent output only (modifier held), for sending it before the modifier is
+ * released without taking any ordinary scrolling along. */
+bool scroll_out_urgent_pending(void);
+void scroll_out_flush_urgent(report_mouse_t *mouse);
 /* Drops everything waiting (RST / CLR / unplug). */
 void scroll_out_reset(void);

@@ -1395,19 +1395,22 @@ void pointing_device_keycode_handler(uint16_t keycode, bool pressed) {
     mouse_after_send();
 }
 
-/* Sends the pending wheel output now, report after report, while the
- * modifier that came with it is still down; a remainder carried to a later
+/* Sends the urgent wheel output (it came with a modifier) now, report after
+ * report, while the modifier is still down; a remainder carried to a later
  * report could arrive after it is released. 128 reports cover the largest
- * value one input can carry (127 detents x 120 counts / 127 per report). */
+ * value one input can carry (127 detents x 120 counts / 127 per report).
+ *
+ * Wheel only: ordinary scrolling and cursor motion stay queued for the
+ * regular send. This can run inside the matrix scan, before QMK applies a
+ * button change from the same device report, so it must not send motion
+ * with the old buttons; the buttons it repeats are the ones the host has. */
 static void send_wheel_now(void) {
-    for (uint8_t i = 0; i < 128 && scroll_out_pending(); i++) {
-        report_mouse_t more = pointing_device_get_report();
-        mouse_merge_buttons(&more);
-        mouse_wheel_flush(&more);
-        pointing_device_set_report(more);
-        pointing_device_send();
+    for (uint8_t i = 0; i < 128 && scroll_out_urgent_pending(); i++) {
+        report_mouse_t wheel = {0};
+        mouse_merge_buttons(&wheel);
+        scroll_out_flush_urgent(&wheel);
+        host_mouse_send(&wheel);
     }
-    mouse_send_flag = false;
     mouse_after_send();
 }
 
@@ -1547,10 +1550,7 @@ static void wheel_repeat_start(uint16_t keycode) {
     wheel_repeat_started = false;
 }
 
-/* Called from mouse_scan_end(), never from housekeeping: a tick written before
- * the next matrix scan is zeroed by apply_ball_cursor() / apply_ball_scroll()
- * as soon as a physical mouse report arrives, so moving the ball used to
- * swallow the repeat entirely. */
+/* Called from mouse_scan_end(), once per scan, after the physical wheel. */
 static void wheel_repeat_task(void) {
 #ifdef MOUSEKEY_ENABLE
     if (wheel_repeat_kc == KC_NO) {
@@ -1592,8 +1592,8 @@ static void process_wheel_keycode(uint16_t keycode, bool pressed) {
         }
         return;
     }
-    /* Remapped WH_* must not fall through to mousekey_send(): that report has
-     * no drag-lock bits and would wipe a held lock on the shared mouse EP. */
+    /* WH_* is handled here, repeat included; falling through to mousekey
+     * as well would scroll twice. */
     if (pressed) {
         emit_analog_wheel(1, vertical, positive);
         wheel_repeat_start(keycode);

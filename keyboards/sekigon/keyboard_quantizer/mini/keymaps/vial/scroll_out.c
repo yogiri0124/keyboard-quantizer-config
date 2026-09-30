@@ -15,7 +15,17 @@ enum { AXIS_V = 0, AXIS_H = 1 };
 
 static int32_t queue[2];    /* waiting to be sent */
 static int32_t urgent[2];   /* modifier held: sent first, on its own */
-static int32_t ball_rem[2]; /* ball counts x QUEUE_PER_DETENT not yet a unit */
+static int32_t ball_rem[2]; /* ball counts x QUEUE_PER_DETENT not yet a unit, */
+static int32_t ball_div = 1; /* ... as a remainder of this divisor */
+
+/* Far more than a hand can scroll before the next report; it only keeps
+ * absurd input from wrapping the sum around. */
+#define QUEUE_LIMIT (INT32_MAX / 2)
+
+static void add(int32_t *q, int64_t amount) {
+    int64_t v = (int64_t)*q + amount;
+    *q        = (int32_t)(v > QUEUE_LIMIT ? QUEUE_LIMIT : (v < -QUEUE_LIMIT ? -QUEUE_LIMIT : v));
+}
 
 /* Host counts per detent: 1 until the host enables the multiplier. */
 static int32_t multiplier(int axis) {
@@ -35,19 +45,28 @@ static int32_t counts(const int32_t *q, int axis) {
 
 void scroll_out_detents(int16_t detents, bool vertical, bool now) {
     int a = vertical ? AXIS_V : AXIS_H;
-    (now ? urgent : queue)[a] += (int32_t)detents * QUEUE_PER_DETENT;
+    add(&(now ? urgent : queue)[a], (int64_t)detents * QUEUE_PER_DETENT);
 }
 
 static void ball_axis(int a, int32_t c, int32_t counts_per_detent) {
     int64_t total = (int64_t)c * QUEUE_PER_DETENT + ball_rem[a];
-    int32_t q     = (int32_t)(total / counts_per_detent);
-    ball_rem[a]   = (int32_t)(total - (int64_t)q * counts_per_detent);
-    queue[a] += q;
+    int64_t q     = total / counts_per_detent;
+    ball_rem[a]   = (int32_t)(total - q * counts_per_detent);
+    add(&queue[a], q);
 }
 
 void scroll_out_ball(int32_t h, int32_t v, int32_t counts_per_detent) {
     if (counts_per_detent < 1) {
         counts_per_detent = 1;
+    }
+    if (counts_per_detent != ball_div) {
+        /* S.SCR or SCR+/SCR- changed the divisor: keep the carried fraction
+         * the same size by rescaling it to the new one (nearest). */
+        for (int a = 0; a < 2; a++) {
+            int64_t r   = (int64_t)ball_rem[a] * counts_per_detent;
+            ball_rem[a] = (int32_t)((r + (r >= 0 ? ball_div / 2 : -(ball_div / 2))) / ball_div);
+        }
+        ball_div = counts_per_detent;
     }
     ball_axis(AXIS_V, v, counts_per_detent);
     ball_axis(AXIS_H, h, counts_per_detent);
@@ -62,12 +81,12 @@ bool scroll_out_pending(void) {
     return false;
 }
 
-void scroll_out_flush(report_mouse_t *mouse) {
-    if (mouse == NULL) {
-        return;
-    }
-    int32_t *q = (counts(urgent, AXIS_V) != 0 || counts(urgent, AXIS_H) != 0) ? urgent : queue;
-    int8_t   sent[2];
+bool scroll_out_urgent_pending(void) {
+    return counts(urgent, AXIS_V) != 0 || counts(urgent, AXIS_H) != 0;
+}
+
+static void flush_from(int32_t *q, report_mouse_t *mouse) {
+    int8_t sent[2];
     for (int a = 0; a < 2; a++) {
         int32_t c = counts(q, a);
         c         = c > 127 ? 127 : (c < -127 ? -127 : c);
@@ -76,6 +95,18 @@ void scroll_out_flush(report_mouse_t *mouse) {
     }
     mouse->v = sent[AXIS_V];
     mouse->h = sent[AXIS_H];
+}
+
+void scroll_out_flush(report_mouse_t *mouse) {
+    if (mouse != NULL) {
+        flush_from(scroll_out_urgent_pending() ? urgent : queue, mouse);
+    }
+}
+
+void scroll_out_flush_urgent(report_mouse_t *mouse) {
+    if (mouse != NULL) {
+        flush_from(urgent, mouse);
+    }
 }
 
 void scroll_out_reset(void) {
