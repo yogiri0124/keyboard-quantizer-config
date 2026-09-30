@@ -252,6 +252,14 @@ static uint16_t timer_now(void) {
     return timer_read() | 1;
 }
 
+/* Elapsed ms since a timer_now() stamp. timer_now() runs up to 1 ms ahead (the
+ * | 1 keeps 0 free for "unset"), and plain timer_elapsed() on it reads 65535
+ * within that millisecond. */
+static uint16_t timer_since(uint16_t stamp) {
+    uint16_t d = (uint16_t)(timer_read() - stamp);
+    return d == UINT16_MAX ? 0 : d;
+}
+
 static int32_t abs32(int32_t value) {
     return value < 0 ? -value : value;
 }
@@ -621,7 +629,7 @@ static bool magic_release_is_tap(uint16_t down_ms) {
     if (limit > MAGIC_TAP_LIMIT_MAX_MS) {
         limit = MAGIC_TAP_LIMIT_MAX_MS;
     }
-    return timer_elapsed(down_ms) <= (uint16_t)limit;
+    return timer_since(down_ms) <= (uint16_t)limit;
 }
 
 static bool is_layer_switch_keycode(uint16_t keycode) {
@@ -937,7 +945,7 @@ static void mouse_config_touch(void) {
 }
 
 static void mouse_config_task(void) {
-    if (config_dirty && timer_elapsed(config_dirty_ms) >= CONFIG_SAVE_DEBOUNCE_MS) {
+    if (config_dirty && timer_since(config_dirty_ms) >= CONFIG_SAVE_DEBOUNCE_MS) {
         mouse_config_save();
     }
 }
@@ -1332,7 +1340,7 @@ static void apply_ball_gesture(int32_t x, int32_t y) {
     if (gesture_dir_lock == GESTURE_NONE) {
         gesture_dir_lock = gesture_id;
     }
-    if (gesture_id == gesture_dir_lock && timer_elapsed(gesture_last_fired_ms) > GESTURE_COOLDOWN_MS) {
+    if (gesture_id == gesture_dir_lock && timer_since(gesture_last_fired_ms) > GESTURE_COOLDOWN_MS) {
         bool saved = skip_mode_oneshot_cancel;
         skip_mode_oneshot_cancel = true;
         if (mode_active(MODE_GESTURE)) {
@@ -1549,7 +1557,7 @@ static void wheel_repeat_task(void) {
         return;
     }
     uint16_t wait = wheel_repeat_started ? (uint16_t)mk_wheel_interval : (uint16_t)(mk_wheel_delay * 10);
-    if (timer_elapsed(wheel_repeat_ms) <= wait) {
+    if (timer_since(wheel_repeat_ms) <= wait) {
         return;
     }
     wheel_repeat_started = true;
@@ -1833,7 +1841,7 @@ void mouse_housekeeping(void) {
         mouse_send_flag = true;
     }
     if (gesture_idle_ms != 0) {
-        uint16_t idle = timer_elapsed(gesture_idle_ms);
+        uint16_t idle = timer_since(gesture_idle_ms);
         if (gesture_dir_lock != GESTURE_NONE && idle > GESTURE_LOCK_IDLE_MS) {
             clear_gesture_motion();
         } else if (idle > GESTURE_ACCUM_IDLE_MS) {
