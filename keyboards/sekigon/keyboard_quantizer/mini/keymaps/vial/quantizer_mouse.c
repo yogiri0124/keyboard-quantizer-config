@@ -1395,6 +1395,19 @@ void pointing_device_keycode_handler(uint16_t keycode, bool pressed) {
     mouse_after_send();
 }
 
+/* Buttons the host has: what the regular send (pointing_device_send) last
+ * delivered. The direct sends below repeat them unchanged. */
+static uint8_t last_sent_buttons = 0;
+
+static void wait_mouse_endpoint_idle(void) {
+#ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
+    extern usb_endpoint_in_t usb_endpoints_in[USB_ENDPOINT_IN_COUNT];
+    uint16_t                 start = timer_read();
+    while (!usb_endpoint_in_is_inactive(&usb_endpoints_in[USB_ENDPOINT_IN_MOUSE]) && timer_elapsed(start) < 10) {
+    }
+#endif
+}
+
 /* Sends the urgent wheel output (it came with a modifier) now, report after
  * report, while the modifier is still down; a remainder carried to a later
  * report could arrive after it is released. 128 reports cover the largest
@@ -1403,15 +1416,28 @@ void pointing_device_keycode_handler(uint16_t keycode, bool pressed) {
  * Wheel only: ordinary scrolling and cursor motion stay queued for the
  * regular send. This can run inside the matrix scan, before QMK applies a
  * button change from the same device report, so it must not send motion
- * with the old buttons; the buttons it repeats are the ones the host has. */
+ * with the old buttons. The buttons it repeats are the ones the regular send
+ * last delivered, so a drag-lock change still waiting for that send is
+ * neither sent early nor skipped by it later.
+ *
+ * It then waits (up to 10 ms) until the mouse endpoint has handed the reports
+ * to the host, so a modifier release queued right after cannot overtake them
+ * on the keyboard endpoint. The host's own processing order across endpoints
+ * is outside the device's control. */
 static void send_wheel_now(void) {
+    bool sent = false;
     for (uint8_t i = 0; i < 128 && scroll_out_urgent_pending(); i++) {
-        report_mouse_t wheel = {0};
-        mouse_merge_buttons(&wheel);
+        report_mouse_t wheel = {.buttons = last_sent_buttons};
         scroll_out_flush_urgent(&wheel);
         host_mouse_send(&wheel);
+        sent = true;
     }
-    mouse_after_send();
+    if (sent) {
+        wait_mouse_endpoint_idle();
+    }
+    if (scroll_out_pending()) {
+        mouse_send_flag = true;
+    }
 }
 
 /* patches/0003: QMK's own mousekey reports land here instead of going straight
@@ -1431,8 +1457,7 @@ void mousekey_host_send(report_mouse_t *report) {
     }
     scroll_out_detents(report->v, true, true);
     scroll_out_detents(report->h, false, true);
-    report_mouse_t mouse = {.x = report->x, .y = report->y};
-    mouse_merge_buttons(&mouse);
+    report_mouse_t mouse = {.buttons = last_sent_buttons, .x = report->x, .y = report->y};
     scroll_out_flush_urgent(&mouse);
     host_mouse_send(&mouse);
     send_wheel_now();
@@ -1735,6 +1760,8 @@ void mouse_wheel_flush(report_mouse_t *mouse) {
 }
 
 void mouse_after_send(void) {
+    /* pointing_device_send() keeps the buttons in the report after sending. */
+    last_sent_buttons = pointing_device_get_report().buttons;
     /* Whatever did not fit goes out with the next report. */
     if (scroll_out_pending()) {
         mouse_send_flag = true;
