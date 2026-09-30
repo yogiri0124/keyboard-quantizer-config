@@ -88,12 +88,15 @@ static void keyboard_report_parser(hid_report_member_t const *member,
 
     if (member->global.usage_page == 0x07 && size > 0 && count > 0) {
       if (size == 1) {
+        /* A Usage Minimum/Maximum range, or keys listed one Usage each (the
+         * descriptor parser gives each listed usage its own member). */
+        bool range = member->local.usage_maximum > member->local.usage_minimum || member->local.usage == 0;
         for (uint8_t idx = 0; idx < count; idx++) {
           if (bit_idx / 8 >= len) {
             break;
           }
           if (hid_report_bit(data, len, bit_idx)) {
-            uint8_t keycode = (uint8_t)(idx + member->local.usage_minimum);
+            uint8_t keycode = (uint8_t)(range ? idx + member->local.usage_minimum : member->local.usage);
             result.bits[keycode >> 3] |= (uint8_t)(1u << (keycode & 7));
           }
           bit_idx++;

@@ -392,8 +392,10 @@ bool parse_report_descriptor(uint8_t interface, uint8_t const *desc,
 
     case HID_RI_REPORT_ID(0):
       dprintf("Report id %u\n", (unsigned)item.raw);
+      /* Only recorded: the list is picked when an Input uses it. A Report ID
+       * that only Feature/Output items use (often between Push and Pop) must
+       * not take over the list of the Input items around it. */
       member.global.report_id = (uint8_t)item.raw;
-      select_id_list(hid_device, &current_collection, &current_member, member.global.report_id);
       break;
 
     case HID_RI_USAGE_PAGE(0):

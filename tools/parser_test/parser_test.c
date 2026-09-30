@@ -121,6 +121,31 @@ static void test_keyboard_boot_layout(void) {
     CHECK(kb_has(0xE1) && kb_has(0x04) && kb_has(0x28) && !kb_has(0x00), "boot layout wrong");
 }
 
+/* Modifiers listed one Usage each instead of a Usage Minimum/Maximum. */
+static void test_keyboard_listed_usages(void) {
+    static const uint8_t d[] = {0x05, 0x01, 0x09, 0x06, 0xA1, 0x01, 0x05, 0x07, 0x09, 0xE0, 0x09, 0xE1,
+                                0x09, 0xE2, 0x09, 0xE3, 0x09, 0xE4, 0x09, 0xE5, 0x09, 0xE6, 0x09, 0xE7,
+                                0x15, 0x00, 0x25, 0x01, 0x75, 0x01, 0x95, 0x08, 0x81, 0x02, 0xC0};
+    load(7, d, sizeof d);
+    reset();
+    uint8_t r[] = {0x02}; /* LShift */
+    parse_report(7, r, sizeof r);
+    CHECK(kb_has(0xE1) && !kb_has(0x00) && !kb_has(0xE0), "listed usages wrong");
+}
+
+/* A Report ID used only by a Feature between Push and Pop does not split the
+ * Input items around it. */
+static void test_feature_id_in_push_pop(void) {
+    static const uint8_t d[] = {0x05, 0x01, 0x09, 0x02, 0xA1, 0x01, 0x85, 0x01, 0x09, 0x30, 0x15, 0x81, 0x25, 0x7F,
+                                0x75, 0x08, 0x95, 0x01, 0x81, 0x06, 0xA4, 0x85, 0x02, 0x09, 0x48, 0x15, 0x00, 0x25,
+                                0x01, 0x35, 0x01, 0x45, 0x78, 0xB1, 0x02, 0xB4, 0x09, 0x31, 0x81, 0x06, 0xC0};
+    load(8, d, sizeof d);
+    reset();
+    uint8_t r[] = {0x01, 0x05, 0x07};
+    parse_report(8, r, sizeof r);
+    CHECK(n_mouse == 1 && last_mouse.x == 5 && last_mouse.y == 7, "x=%d y=%d (want 5, 7)", last_mouse.x, last_mouse.y);
+}
+
 /* Consumer array with two 16-bit elements: two usages, not one number. */
 static void test_consumer_array(void) {
     static const uint8_t d[] = {0x05, 0x0C, 0x09, 0x01, 0xA1, 0x01, 0x19, 0x00, 0x2A, 0x9C, 0x02, 0x15,
@@ -156,6 +181,8 @@ int main(void) {
     test_report_id_push_pop();
     test_keyboard_array_offset();
     test_keyboard_boot_layout();
+    test_keyboard_listed_usages();
+    test_feature_id_in_push_pop();
     test_consumer_array();
     test_mouse_composite();
     if (failures) {

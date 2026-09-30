@@ -1395,8 +1395,10 @@ static void wait_mouse_endpoint_idle(void) {
 
 /* Sends the urgent wheel output (it came with a modifier) now, report after
  * report, while the modifier is still down; a remainder carried to a later
- * report could arrive after it is released. 128 reports cover the largest
- * value one input can carry (127 detents x 120 counts / 127 per report).
+ * report could arrive after it is released. Normally it is one or two
+ * reports; a 16-bit wheel value can need more (127 detents x 120 counts take
+ * 120 reports). WHEEL_NOW_MAX_REPORTS only bounds how long this may block:
+ * anything beyond it is not lost but goes out with the regular send.
  *
  * Wheel only: ordinary scrolling and cursor motion stay queued for the
  * regular send. This can run inside the matrix scan, before QMK applies a
@@ -1410,8 +1412,10 @@ static void wait_mouse_endpoint_idle(void) {
  * on the keyboard endpoint. The host's own processing order across endpoints
  * is outside the device's control. sent: the caller already put wheel output
  * on the wire, so wait even if nothing is left here. */
+#define WHEEL_NOW_MAX_REPORTS 512
+
 static void send_wheel_now(bool sent) {
-    for (uint8_t i = 0; i < 128 && scroll_out_urgent_pending(); i++) {
+    for (uint16_t i = 0; i < WHEEL_NOW_MAX_REPORTS && scroll_out_urgent_pending(); i++) {
         report_mouse_t wheel = {.buttons = last_sent_buttons};
         scroll_out_flush_urgent(&wheel);
         host_mouse_send(&wheel);

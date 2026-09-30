@@ -44,6 +44,7 @@ static uint8_t           hid_rx_overflow_inst;
 static uint8_t           hid_rx_overflow_epoch;
 static volatile uint16_t hid_rx_overflow_seq;   /* odd while core1 is writing */
 static uint16_t          hid_rx_overflow_taken; /* last even seq core0 consumed */
+static uint8_t           hid_rx_overflow_pos;   /* ring tail when it was written */
 static uint8_t          hid_unmount_ids[HID_UNMOUNT_QUEUE];
 static uint8_t          hid_unmount_epoch[HID_UNMOUNT_QUEUE];
 static volatile uint8_t hid_unmount_head;
@@ -274,13 +275,57 @@ static bool matrix_moved(void) {
     return memcmp(scan_start, matrix_dest, sizeof(scan_start)) != 0;
 }
 
-/* Drains the RX ring up to `end`, which the caller snapshots from hid_rx_tail
- * so core1 cannot extend the run mid-drain, stopping early once the matrix
- * moved. Returns whether a report was parsed that reports a change. */
-static bool hid_rx_drain_to(uint8_t end) {
-    bool changed = false;
-    while (hid_rx_head != end && !matrix_moved()) {
+/* Takes the overflow report if one is waiting at the ring position `head`.
+ * It belongs after every ring entry older than it (the ones before the tail it
+ * saw) and before any enqueued once draining freed space, so it is taken only
+ * when the drain has reached exactly that position, however many scans that
+ * took. Returns whether it reported a change. */
+static bool hid_rx_take_overflow(uint8_t head) {
+    uint16_t seq = hid_rx_overflow_seq;
+    if ((seq & 1u) != 0 || seq == hid_rx_overflow_taken) {
+        return false;
+    }
+    uint8_t buf[64];
+    __compiler_memory_barrier();
+    uint8_t pos   = hid_rx_overflow_pos;
+    uint8_t if_id = hid_rx_overflow_inst;
+    uint8_t epoch = hid_rx_overflow_epoch;
+    uint8_t len   = hid_rx_overflow_len;
+    if (len > sizeof(buf)) {
+        len = sizeof(buf);
+    }
+    if (len > 0) {
+        memcpy(buf, hid_rx_overflow_buf, len);
+    }
+    __compiler_memory_barrier();
+    /* A changed sequence means core1 replaced the slot while we copied, so
+     * this copy may be torn. Leave it; the newer report is taken later. */
+    if (hid_rx_overflow_seq != seq || pos != head) {
+        return false;
+    }
+    hid_rx_overflow_taken = seq;
+    return epoch == hid_if_epoch[if_id] && parse_report(if_id, buf, len);
+}
+
+/* Drains the RX ring, with the overflow report in its place, stopping once
+ * the matrix moved or at the tail seen on entry. Relative mouse deltas are
+ * never dropped, only deferred. Returns whether a report was parsed that
+ * reports a change. */
+static bool hid_rx_drain(void) {
+    bool    changed = false;
+    uint8_t end     = hid_rx_tail; /* a steady stream cannot keep us here */
+    for (;;) {
         uint8_t h = hid_rx_head;
+        if (matrix_moved()) {
+            break;
+        }
+        if (hid_rx_take_overflow(h)) {
+            changed = true;
+            continue; /* it may have moved the matrix */
+        }
+        if (h == end) {
+            break;
+        }
         __compiler_memory_barrier();
         uint8_t if_id = hid_rx_inst[h];
         if (hid_rx_epoch[h] == hid_if_epoch[if_id] && parse_report(if_id, hid_rx_buf[h], hid_rx_len[h])) {
@@ -339,45 +384,10 @@ bool matrix_scan_custom(matrix_row_t current_matrix[]) {
     }
     memcpy(scan_start, current_matrix, sizeof(scan_start));
 
-    /* Relative mouse deltas must not be overwritten. Drain every queued report,
-     * but stop at the tail as it was on entry: the overflow slot was filled
-     * while the ring was full, so it belongs after those and before anything
-     * core1 enqueues once draining frees space. Draining the whole ring first
-     * would let a newer button report be applied before an older one. The
-     * overflow slot waits while ring entries before it are still pending. */
-    uint8_t first_end = hid_rx_tail;
-    if (hid_rx_drain_to(first_end)) {
-        matrix_has_changed = true;
-    }
-    uint16_t overflow_seq = hid_rx_overflow_seq;
-    if (hid_rx_head == first_end && !matrix_moved() && (overflow_seq & 1u) == 0 && overflow_seq != hid_rx_overflow_taken) {
-        uint8_t buf[64];
-        uint8_t if_id;
-        uint8_t epoch;
-        uint8_t len;
-        __compiler_memory_barrier();
-        if_id = hid_rx_overflow_inst;
-        epoch = hid_rx_overflow_epoch;
-        len   = hid_rx_overflow_len;
-        if (len > sizeof(buf)) {
-            len = sizeof(buf);
-        }
-        if (len > 0) {
-            memcpy(buf, hid_rx_overflow_buf, len);
-        }
-        __compiler_memory_barrier();
-        /* A changed sequence means core1 replaced the slot while we copied, so
-         * this copy may be torn. Drop it; the newer report is taken next scan. */
-        if (hid_rx_overflow_seq == overflow_seq) {
-            hid_rx_overflow_taken = overflow_seq;
-            if (epoch == hid_if_epoch[if_id] && parse_report(if_id, buf, len)) {
-                matrix_has_changed = true;
-            }
-        }
-    }
-    /* Anything core1 enqueued while we were draining, in order after the
-     * overflow report. */
-    if (hid_rx_drain_to(hid_rx_tail)) {
+    /* Relative mouse deltas must not be overwritten: every queued report is
+     * parsed, in the order core1 received it, over as many scans as the
+     * one-change-per-scan rule needs. */
+    if (hid_rx_drain()) {
         matrix_has_changed = true;
     }
     /* Always flush wheel batches. parse_report() is false for vendor reports
@@ -508,6 +518,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
             hid_rx_overflow_len   = (uint8_t)len;
             hid_rx_overflow_inst  = if_id;
             hid_rx_overflow_epoch = hid_if_epoch[if_id];
+            hid_rx_overflow_pos   = tail;
             __compiler_memory_barrier();
             hid_rx_overflow_seq++; /* even: the slot is stable again */
         }
