@@ -1423,9 +1423,9 @@ static void wait_mouse_endpoint_idle(void) {
  * It then waits (up to 10 ms) until the mouse endpoint has handed the reports
  * to the host, so a modifier release queued right after cannot overtake them
  * on the keyboard endpoint. The host's own processing order across endpoints
- * is outside the device's control. */
-static void send_wheel_now(void) {
-    bool sent = false;
+ * is outside the device's control. sent: the caller already put wheel output
+ * on the wire, so wait even if nothing is left here. */
+static void send_wheel_now(bool sent) {
     for (uint8_t i = 0; i < 128 && scroll_out_urgent_pending(); i++) {
         report_mouse_t wheel = {.buttons = last_sent_buttons};
         scroll_out_flush_urgent(&wheel);
@@ -1460,7 +1460,14 @@ void mousekey_host_send(report_mouse_t *report) {
     report_mouse_t mouse = {.buttons = last_sent_buttons, .x = report->x, .y = report->y};
     scroll_out_flush_urgent(&mouse);
     host_mouse_send(&mouse);
-    send_wheel_now();
+    send_wheel_now(mouse.v != 0 || mouse.h != 0);
+    /* Button changes (a mousekey button, or QMK clearing them all) go
+     * through the regular send, which tracks what the host has. */
+    report_mouse_t merged = {0};
+    mouse_merge_buttons(&merged);
+    if (merged.buttons != last_sent_buttons) {
+        mouse_send_flag = true;
+    }
 }
 
 static void exec_identity_tap(uint16_t kc) {
@@ -1531,7 +1538,7 @@ static void add_wheel(int16_t val, bool vertical) {
 #endif
     scroll_out_detents(clamp_hid8(val), vertical, mods != 0);
     if (mods != 0) {
-        send_wheel_now();
+        send_wheel_now(false);
     } else {
         mouse_send_flag = true;
     }
