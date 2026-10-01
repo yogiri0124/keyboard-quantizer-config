@@ -450,7 +450,9 @@ bool parse_report_descriptor(uint8_t interface, uint8_t const *desc,
     case HID_RI_LOGICAL_MAXIMUM(0):
       dprintf("Logical maximum %ld\n", (long)item.data);
 
-      member.global.logical_maximum = item.data;
+      /* Signed only when the minimum is: 0..255 is commonly written as
+       * 15 00 25 FF, where FF must not read as -1 (Linux decides the same). */
+      member.global.logical_maximum = member.global.logical_minimum < 0 ? item.data : (int32_t)item.raw;
       break;
 
     case HID_RI_REPORT_SIZE(0):

@@ -298,8 +298,11 @@ static void extra_key_report_parser(hid_report_member_t const *member, uint8_t c
     }
 
     /* Array form: every element is its own usage index (two keys held give
-     * two elements); parse_value() would pack them all into one number. */
-    if (member->global.report_size > 1 && member->global.report_count > 1) {
+     * two elements); parse_value() would pack them all into one number. A
+     * single element over a usage range is an array too: its value outside
+     * the logical range (the null state) means "nothing held". */
+    if (member->global.report_size > 1 &&
+        (member->global.report_count > 1 || member->local.usage_maximum > member->local.usage_minimum)) {
       for (uint8_t idx = 0; idx < member->global.report_count; idx++) {
         int32_t raw   = (int32_t)read_bits(data, len, &bit_idx, member->global.report_size);
         int32_t usage = raw;
