@@ -151,6 +151,25 @@ static void test_consumer_single_null(void) {
     CHECK(n_consumer == 1 && consumer[0] == 0xB5, "press: %d usage(s), first %04X", n_consumer, consumer[0]);
 }
 
+/* Consumer array with its usages listed one each: 1 = E9, 2 = EA, 0 = none. */
+static void test_consumer_listed_array(void) {
+    static const uint8_t d[] = {0x05, 0x0C, 0x09, 0x01, 0xA1, 0x01, 0x09, 0xE9, 0x09, 0xEA, 0x15, 0x01,
+                                0x25, 0x02, 0x75, 0x08, 0x95, 0x01, 0x81, 0x40, 0xC0};
+    load(11, d, sizeof d);
+    reset();
+    uint8_t up[] = {0x01};
+    parse_report(11, up, sizeof up);
+    CHECK(n_consumer == 1 && consumer[0] == 0xE9, "1: %d usage(s), first %04X", n_consumer, consumer[0]);
+    reset();
+    uint8_t down[] = {0x02};
+    parse_report(11, down, sizeof down);
+    CHECK(n_consumer == 1 && consumer[0] == 0xEA, "2: %d usage(s), first %04X", n_consumer, consumer[0]);
+    reset();
+    uint8_t none[] = {0x00};
+    parse_report(11, none, sizeof none);
+    CHECK(n_consumer == 0, "0: %d usage(s)", n_consumer);
+}
+
 /* Modifiers listed one Usage each instead of a Usage Minimum/Maximum. */
 static void test_keyboard_listed_usages(void) {
     static const uint8_t d[] = {0x05, 0x01, 0x09, 0x06, 0xA1, 0x01, 0x05, 0x07, 0x09, 0xE0, 0x09, 0xE1,
@@ -213,6 +232,7 @@ int main(void) {
     test_keyboard_boot_layout();
     test_keyboard_unsigned_max();
     test_consumer_single_null();
+    test_consumer_listed_array();
     test_keyboard_listed_usages();
     test_feature_id_in_push_pop();
     test_consumer_array();

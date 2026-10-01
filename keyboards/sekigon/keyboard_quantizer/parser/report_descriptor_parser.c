@@ -490,6 +490,25 @@ bool parse_report_descriptor(uint8_t interface, uint8_t const *desc,
       dprintf("Input %u\n", (unsigned)item.raw);
       // apply member
       usage_table_idx = usage_table_idx > 0 ? usage_table_idx : 1;
+      /* In an Array input (bit 1 clear) a report value picks one of the
+       * usages. Usages listed one by one in a consecutive run are the same as
+       * that range (09 E9 09 EA = Usage Minimum E9, Maximum EA), which is what
+       * the report parser resolves array values against. */
+      if ((item.raw & 0x02) == 0 && usage_table_idx > 1 &&
+          member.local.usage_maximum <= member.local.usage_minimum) {
+        bool run = true;
+        for (uint16_t i = 1; i < usage_table_idx; i++) {
+          if (usage_table[i] != (uint16_t)(usage_table[i - 1] + 1)) {
+            run = false;
+          }
+        }
+        if (run) {
+          member.local.usage_minimum = usage_table[0];
+          member.local.usage_maximum = usage_table[usage_table_idx - 1];
+          usage_table[0]             = 0;
+          usage_table_idx            = 1;
+        }
+      }
       if (current_collection != NULL) {
         select_id_list(hid_device, &current_collection, &current_member, member.global.report_id);
       }

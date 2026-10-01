@@ -18,6 +18,12 @@
 
 #define VIAL_KEYBOARD_UID {0x05, 0xE4, 0xA1, 0x7F, 0xDC, 0x87, 0xCB, 0x2A}
 
+/* Keys and buttons arrive as USB reports the device already debounced. QMK's
+ * default (5 ms, sym_defer_g) would also restart on every cursor report, so
+ * a click while the ball moves waited, and a press and release in successive
+ * scans vanished. */
+#define DEBOUNCE 0
+
 #define MATRIX_COLS_DEFAULT 8
 #define MATRIX_MSGES_ROW 31
 
