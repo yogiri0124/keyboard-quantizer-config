@@ -98,7 +98,8 @@ static void compose(uint8_t *matrix) {
                 if (!((s->keys.bits[u >> 3] >> (u & 7)) & 1)) {
                     continue;
                 }
-                if (u >= 0xE0) {
+                if (u >= 0xE0 && u <= 0xE7) {
+                    /* Modifiers are row 0; their identity row (29) stays empty. */
                     matrix[KQ_ROW_MODIFIERS] |= (uint8_t)(1u << (u - 0xE0));
                 } else {
                     set_cell(matrix, u);

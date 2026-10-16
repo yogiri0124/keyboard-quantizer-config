@@ -71,6 +71,12 @@ static void test_matrix(void) {
     kb(32, 0, 0x05, 0); /* B on keyboard 2: keyboard 1's A stays */
     CHECK(hid_input_scan(m), "no change");
     CHECK(cell(0x04) && cell(0x05), "keyboards erased each other");
+    CHECK_EQ(m[29], 0); /* modifiers are row 0, not their identity row */
+
+    kb(32, 0, 0x05, 0xE9); /* E8..EF are ordinary cells (row 30) */
+    CHECK(hid_input_scan(m) && cell(0xE9), "usage E9 missing");
+    kb(32, 0, 0x05, 0);
+    CHECK(hid_input_scan(m) && !cell(0xE9), "usage E9 stuck");
 
     /* Press and release of C in one go: two scans, one change each. */
     kb(16, 0x02, 0x04, 0x06);
