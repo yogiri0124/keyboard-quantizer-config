@@ -24,6 +24,7 @@
 #include "mouse.h"
 #include "settings.h"
 #include "wheel.h"
+#include "identity.h"
 
 typedef struct {
     uint16_t keycode;
@@ -136,9 +137,11 @@ static void ctx_init(key_ctx_t *ctx, uint16_t keycode, keyrecord_t *record) {
     ctx->keycode   = keycode;
     ctx->inner     = inner_keycode(keycode, record);
     ctx->pressed   = record->event.pressed;
-    ctx->magic     = (record->event.key.row == VIAL_MATRIX_MAGIC && record->event.key.col == VIAL_MATRIX_MAGIC) ||
-                 IS_COMBOEVENT(record->event);
-    ctx->injected  = mouse_injecting() || wheel_is_injected(record);
+    /* A gesture tap counts as a tap dance TAP would: a hold key mapped to a
+     * gesture cell arms its oneshot. */
+    ctx->magic = (record->event.key.row == VIAL_MATRIX_MAGIC && record->event.key.col == VIAL_MATRIX_MAGIC) ||
+                 IS_COMBOEVENT(record->event) || gesture_is_cell_event(record);
+    ctx->injected  = mouse_injecting() || wheel_is_cell_event(record) || gesture_is_cell_event(record);
     ctx->tap_count = record->tap.count;
 }
 

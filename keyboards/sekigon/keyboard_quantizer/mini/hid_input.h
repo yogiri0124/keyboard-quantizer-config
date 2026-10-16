@@ -27,15 +27,15 @@
 #define KQ_ROW_VIRTUAL 31
 
 /* Processes queued events into matrix (KQ_MATRIX_ROWS rows of 8 columns),
- * stopping at the first report that changes it: QMK compares the matrix once
- * per scan, so a press and release in one scan would vanish. True if the
- * matrix changed. */
+ * stopping at the first report that changes it (QMK compares the matrix once
+ * per scan, so a press and release in one scan would vanish) or after a
+ * bounded number of events. True if the matrix changed. */
 bool hid_input_scan(uint8_t *matrix);
 
 /* Hooks into the keymap (weak defaults do nothing). */
 void kq_mouse_report(const hid_mouse_t *mouse);    /* motion, wheel, pan; buttons are in the matrix */
 void kq_mouse_scan_end(void);                       /* once per scan, after the reports */
-void kq_mouse_device_lost(void);                    /* a mouse interface went away */
+void kq_mouse_device_lost(void);                    /* a mouse went away, or the last device */
 void kq_vendor_report(uint16_t page, const uint8_t *data, uint8_t len);
 
 typedef struct {

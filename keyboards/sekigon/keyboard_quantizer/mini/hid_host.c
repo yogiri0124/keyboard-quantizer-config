@@ -16,6 +16,11 @@
 
 static volatile uint8_t  kbd_addr;
 static volatile uint8_t  kbd_instance;
+/* The LED report goes out asynchronously: TinyUSB keeps a pointer to it
+ * until the transfer completes, so it lives here and is not touched while
+ * led_busy. */
+static uint8_t           led_report;
+static volatile bool     led_busy;
 static volatile bool     activity;      /* set by core1 on mount / report */
 static uint16_t          blink_start;   /* core0 */
 static bool              blinking;      /* core0 */
@@ -44,7 +49,18 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
     if (dev_addr == kbd_addr && instance == kbd_instance) {
         kbd_addr     = 0;
         kbd_instance = 0;
+        led_busy     = false; /* its transfer will not complete */
     }
+}
+
+void tuh_hid_set_report_complete_cb(uint8_t dev_addr, uint8_t instance, uint8_t report_id, uint8_t report_type,
+                                    uint16_t len) {
+    (void)dev_addr;
+    (void)instance;
+    (void)report_id;
+    (void)report_type;
+    (void)len;
+    led_busy = false;
 }
 
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *report, uint16_t len) {
@@ -63,12 +79,15 @@ void matrix_init_kb(void) {
 static void sync_lock_leds(void) {
     static uint8_t sent;
     uint8_t        leds = host_keyboard_leds();
-    if (leds == sent || kbd_addr == 0) {
+    if (leds == sent || kbd_addr == 0 || led_busy) {
         return;
     }
-    uint8_t report = leds;
-    if (tuh_hid_set_report(kbd_addr, kbd_instance, 0, HID_REPORT_TYPE_OUTPUT, &report, sizeof(report))) {
+    led_report = leds;
+    led_busy   = true;
+    if (tuh_hid_set_report(kbd_addr, kbd_instance, 0, HID_REPORT_TYPE_OUTPUT, &led_report, sizeof(led_report))) {
         sent = leds;
+    } else {
+        led_busy = false; /* not started: try again next time */
     }
 }
 

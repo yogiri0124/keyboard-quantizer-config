@@ -11,6 +11,10 @@
 #define USAGE_MOUSE_BTN1 0xD1
 #define MOUSE_MATRIX_BUTTONS 8 /* BTN1..8; more would collide with the wheel cells */
 #define SOURCES_MAX 24
+/* Events per scan: enough to keep up with every device at full rate, few
+ * enough that a stream of reports cannot keep the scan from returning to
+ * QMK (sending, housekeeping) while nothing in the matrix changes. */
+#define EVENTS_PER_SCAN 32
 
 typedef struct {
     bool       used;
@@ -147,6 +151,15 @@ static bool interface_has_mouse(uint8_t interface) {
     return hid_desc_has_kind(interface, HID_KIND_MOUSE);
 }
 
+static bool any_device(void) {
+    for (uint8_t i = 0; i < HID_DESC_DEVICES; i++) {
+        if (hid_desc_device_at(i) != NULL) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* The handlers return whether a key or button state changed, i.e. whether
  * the matrix needs composing again. */
 static bool remove_interface(uint8_t interface) {
@@ -158,9 +171,12 @@ static bool remove_interface(uint8_t interface) {
             changed = true;
         }
     }
+    bool had_device = hid_desc_device(interface) != NULL;
     hid_desc_remove(interface);
     sync_host_usages();
-    if (had_mouse) {
+    /* A mouse gone, or nothing left at all (a keyboard alone may hold a
+     * modifier lock): drop the latches. */
+    if (had_mouse || (had_device && !any_device())) {
         kq_mouse_device_lost();
     }
     return changed;
@@ -249,7 +265,7 @@ bool hid_input_scan(uint8_t *matrix) {
     memcpy(start, matrix, KQ_MATRIX_ROWS);
     hidq_event_t ev;
     bool         moved = false;
-    while (!moved && hidq_pop(&ev)) {
+    for (uint8_t n = 0; n < EVENTS_PER_SCAN && !moved && hidq_pop(&ev); n++) {
         if (handle_event(&ev)) {
             compose(matrix);
             moved = memcmp(start, matrix, KQ_MATRIX_ROWS) != 0;

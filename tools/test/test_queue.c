@@ -6,7 +6,18 @@
 #include "check.h"
 #include "hid_queue.h"
 
-void hidq_barrier(void) {}
+/* A test can make "core1" run at the n-th barrier core0 passes, to land a
+ * push between two steps of a pop. */
+static int  barrier_countdown = -1;
+static void (*barrier_hook)(void);
+
+void hidq_barrier(void) {
+    if (barrier_countdown > 0 && --barrier_countdown == 0 && barrier_hook != NULL) {
+        void (*hook)(void) = barrier_hook;
+        barrier_hook       = NULL;
+        hook();
+    }
+}
 void hidq_wait_us(uint32_t us) {
     (void)us;
 }
@@ -151,8 +162,80 @@ static void test_unmount_drops_slot(void) {
     CHECK(!hidq_pop(&ev), "left over");
 }
 
+/* Overflow slots are per Report ID: a mouse report must not replace a
+ * consumer release of the same interface. */
+static const uint8_t with_ids[] = {0x05, 0x01, 0x09, 0x02, 0xA1, 0x01, 0x85, 0x01, 0xC0};
+
+static void push_id(uint8_t interface, uint8_t id, uint16_t tag) {
+    uint8_t buf[HIDQ_REPORT_MAX] = {id, (uint8_t)tag, (uint8_t)(tag >> 8)};
+    hidq_push_report(interface, buf, 64);
+}
+
+static uint16_t id_tag(const hidq_event_t *ev) {
+    return (uint16_t)(ev->data[1] | (ev->data[2] << 8));
+}
+
+static void test_slots_per_report_id(void) {
+    hidq_reset();
+    hidq_event_t ev;
+    hidq_push_mount(17, with_ids, sizeof with_ids);
+    CHECK(hidq_pop(&ev) && ev.type == HIDQ_MOUNT, "mount");
+    uint16_t tag = 0;
+    while (hidq_stats().slot_reports == 0) {
+        push_id(17, 1, tag++);
+    }
+    push_id(17, 2, 5000); /* consumer release */
+    push_id(17, 1, 6000); /* newer mouse report */
+    int got_release = 0, got_mouse = 0;
+    while (hidq_pop(&ev)) {
+        got_release += ev.data[0] == 2 && id_tag(&ev) == 5000;
+        got_mouse += ev.data[0] == 1 && id_tag(&ev) == 6000;
+    }
+    CHECK(got_release == 1 && got_mouse == 1, "release %d mouse %d", got_release, got_mouse);
+}
+
+/* Core1 replaces a slot (after the ring drained and filled again) right
+ * while core0 is reading it: core0 must not hand out the newer report ahead
+ * of the ring records that came before it. */
+static uint16_t race_tag;
+
+static void refill_until_overflow(void) {
+    uint32_t before = hidq_stats().slot_reports;
+    while (hidq_stats().slot_reports == before) {
+        push_tagged(0, race_tag++, 64);
+    }
+}
+
+static void test_slot_replaced_while_read(void) {
+    hidq_reset();
+    hidq_event_t ev;
+    race_tag = 0;
+    while (hidq_stats().slot_reports == 0) {
+        push_tagged(0, race_tag++, 64);
+    }
+    uint16_t first_slot = (uint16_t)(race_tag - 1);
+    for (uint16_t i = 0; i < first_slot; i++) {
+        CHECK(hidq_pop(&ev) && tag_of(&ev) == i, "ring %u", i);
+    }
+    /* The slot is due now. Barriers in this pop: after the tail read, then
+     * in the slot read after the sequence check: refill there. */
+    barrier_hook      = refill_until_overflow;
+    barrier_countdown = 2;
+    uint16_t expect   = (uint16_t)(first_slot + 1);
+    CHECK(hidq_pop(&ev), "nothing");
+    CHECK(tag_of(&ev) == expect, "got %u, want the ring record %u first", tag_of(&ev), expect);
+    uint16_t last = tag_of(&ev);
+    while (hidq_pop(&ev)) {
+        CHECK(tag_of(&ev) > last, "out of order: %u after %u", tag_of(&ev), last);
+        last = tag_of(&ev);
+    }
+    CHECK_EQ(last, race_tag - 1);
+}
+
 int main(void) {
     test_order();
+    test_slots_per_report_id();
+    test_slot_replaced_while_read();
     test_wrap();
     test_overflow();
     test_slot_position();

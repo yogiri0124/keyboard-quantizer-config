@@ -17,8 +17,11 @@
 #include QMK_KEYBOARD_H
 
 #include "virtser.h"
+#include "vial.h"
+#include "keymap_introspection.h"
 
 #include "cli.h"
+#include "identity.h"
 #include "mouse.h"
 #include "mouse_keys.h"
 #include "settings.h"
@@ -60,6 +63,32 @@ const uint16_t keymaps[][MATRIX_ROWS][MATRIX_COLS] = {{
     {0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef},
     {KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO},
 }};
+
+/* QMK's keycode lookup (quantum/keymap_common.c), with one addition: layer
+ * 0's gesture cells are layer 1's. Gestures tap their cell like a key
+ * (mouse.c), so QMK resolves them as it does any key, also when it holds a
+ * tap back while a tap-hold key decides; on layer 0, where the keymap is
+ * the plain identity layout, that lands on layer 1's cells. */
+uint16_t keymap_key_to_keycode(uint8_t layer, keypos_t key) {
+    /* No keycode processing while Vial unlocks. */
+    if (vial_unlock_in_progress) {
+        return KC_NO;
+    }
+    if (key.row == VIAL_MATRIX_MAGIC && key.col == VIAL_MATRIX_MAGIC) {
+        return g_vial_magic_keycode_override;
+    }
+    if (key.row >= MATRIX_ROWS || key.col >= MATRIX_COLS) {
+        return KC_NO;
+    }
+    if (key.row == GESTURE_ROW && layer == 0 && DYNAMIC_KEYMAP_LAYER_COUNT > 1) {
+        layer = 1;
+    }
+    return keycode_at_keymap_location(layer, key.row, key.col);
+}
+
+#if defined(ENCODER_MAP_ENABLE) || defined(DIP_SWITCH_MAP_ENABLE)
+#    error "keymap_key_to_keycode above does not handle encoder or DIP switch maps"
+#endif
 
 static int8_t virtser_send_char(uint8_t c) {
     virtser_send(c);

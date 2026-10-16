@@ -110,6 +110,35 @@ static void test_matrix(void) {
     hidq_push_report(17, click, sizeof click);
     CHECK(!hid_input_scan(m), "report after unmount");
     CHECK(hid_input_stats().unknown_reports >= 1, "not counted");
+
+    /* The last device (a keyboard) going away also drops the latches. */
+    lost_n = 0;
+    hidq_push_unmount(16);
+    CHECK(hid_input_scan(m) && !cell(0x04), "keyboard 1 keys not released");
+    CHECK_EQ(lost_n, 1);
+}
+
+/* A stream of motion reports cannot keep one scan going. */
+static void test_scan_budget(void) {
+    hidq_reset();
+    memset(m, 0, sizeof m);
+    hidq_push_mount(17, mouse, sizeof mouse);
+    hid_input_scan(m);
+    uint8_t move[] = {0x01, 0x00, 0x01};
+    for (int i = 0; i < 100; i++) {
+        hidq_push_report(17, move, sizeof move);
+    }
+    mouse_reports = 0;
+    hid_input_scan(m);
+    CHECK(mouse_reports > 0 && mouse_reports < 100, "one scan took %d reports", mouse_reports);
+    while (mouse_reports < 100) {
+        int before = mouse_reports;
+        hid_input_scan(m);
+        if (mouse_reports == before) {
+            break;
+        }
+    }
+    CHECK_EQ(mouse_reports, 100);
 }
 
 static void test_consumer(void) {
@@ -135,5 +164,6 @@ static void test_consumer(void) {
 int main(void) {
     test_matrix();
     test_consumer();
+    test_scan_budget();
     return check_done("input");
 }

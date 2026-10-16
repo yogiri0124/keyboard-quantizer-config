@@ -14,26 +14,16 @@
 #include "scroll_out.h"
 
 #define CELLS 4 /* WH_UP, WH_DOWN, WH_LEFT, WH_RIGHT */
-#define CELL_QUEUE 8
+#define TAPS_PER_SCAN 8
 #define URGENT_MAX_REPORTS 512
 #define ENDPOINT_WAIT_MS 10
 
 _Static_assert(KC_MS_WH_DOWN == KC_MS_WH_UP + 1 && KC_MS_WH_LEFT == KC_MS_WH_UP + 2 && KC_MS_WH_RIGHT == KC_MS_WH_UP + 3,
                "wheel keycodes are consecutive");
 
-/* Wheel movement collected during a scan, as the device sent it. */
-static int32_t batch_wheel;
-static int32_t batch_pan;
-
-/* Taps on a wheel cell that QMK has not handled yet, with the amount each
- * one carries. QMK may hold a tap back (tap-hold deciding), so the amount
- * waits here, matched to the tap by cell and order, not by timing. */
-static struct {
-    int16_t amount[CELL_QUEUE];
-    uint8_t head;
-    uint8_t count;
-    uint8_t releases; /* injected releases still to come */
-} cells[CELLS];
+/* Wheel detents still to be tapped, as the device sent them. */
+static int32_t backlog_wheel;
+static int32_t backlog_pan;
 
 static uint16_t repeat_kc = KC_NO;
 static uint16_t repeat_since;
@@ -60,13 +50,20 @@ static uint16_t cell_kc_for(int32_t delta, bool vertical) {
     return delta > 0 ? KC_MS_WH_LEFT : KC_MS_WH_RIGHT;
 }
 
-static int cell_at(keypos_t k) {
-    for (int i = 0; i < CELLS; i++) {
-        if (identity_is(k, (uint16_t)(KC_MS_WH_UP + i))) {
-            return i;
+/* The device value one tap of a cell stands for (the inverse of
+ * cell_kc_for): one detent, signed as the device sent it. */
+static int16_t cell_detent(uint16_t cell_kc) {
+    return (cell_kc == KC_MS_WH_UP || cell_kc == KC_MS_WH_LEFT) ? 1 : -1;
+}
+
+/* The wheel cell at k, or KC_NO. */
+static uint16_t cell_at(keypos_t k) {
+    for (uint16_t kc = KC_MS_WH_UP; kc <= KC_MS_WH_RIGHT; kc++) {
+        if (identity_is(k, kc)) {
+            return kc;
         }
     }
-    return -1;
+    return KC_NO;
 }
 
 int32_t scroll_out_host_multiplier(bool vertical) {
@@ -131,93 +128,79 @@ static void scroll(int16_t val, bool vertical) {
     }
 }
 
-/* A key mapped to WH_* scrolls the way QMK assigns to that keycode. */
-static void scroll_as(uint16_t kc, int16_t magnitude) {
-    int16_t mag = magnitude < 0 ? (int16_t)(magnitude == INT16_MIN ? INT16_MAX : -magnitude) : magnitude;
-    scroll(kc_positive(kc) ? mag : (int16_t)-mag, kc_vertical(kc));
+/* One detent the way QMK assigns to the WH_* keycode kc. */
+static void scroll_as(uint16_t kc) {
+    scroll(kc_positive(kc) ? 1 : -1, kc_vertical(kc));
 }
 
-/* What a physical movement does when its cell holds the WH_* key kc. */
-static void scroll_from_cell(uint16_t cell_kc, uint16_t kc, int16_t amount) {
+/* One tap of a wheel cell that holds the WH_* key kc. */
+static void scroll_from_cell(uint16_t cell_kc, uint16_t kc) {
+    int16_t detent = cell_detent(cell_kc);
     if (kc == cell_kc) {
-        scroll(amount, kc_vertical(kc)); /* as the device sent it */
+        scroll(detent, kc_vertical(kc)); /* as the device sent it */
     } else if (kc_vertical(kc) == kc_vertical(cell_kc)) {
         /* Remapped within the axis: the only meaning is "invert". */
-        scroll(kc_positive(kc) == kc_positive(cell_kc) ? amount : (int16_t)-amount, kc_vertical(kc));
+        scroll(kc_positive(kc) == kc_positive(cell_kc) ? detent : (int16_t)-detent, kc_vertical(kc));
     } else {
-        scroll_as(kc, amount);
+        scroll_as(kc);
     }
+}
+
+/* A wheel sends a detent or two per report; this only bounds what a
+ * misbehaving device could pile up. */
+#define BACKLOG_MAX 64
+
+static void add_backlog(int32_t *backlog, int16_t v) {
+    int32_t b = *backlog + v;
+    *backlog  = b > BACKLOG_MAX ? BACKLOG_MAX : (b < -BACKLOG_MAX ? -BACKLOG_MAX : b);
 }
 
 void wheel_physical(int16_t wheel, int16_t pan) {
-    batch_wheel += wheel;
-    batch_pan += pan;
+    add_backlog(&backlog_wheel, wheel);
+    add_backlog(&backlog_pan, pan);
 }
 
-static void tap_cell(int32_t delta, bool vertical) {
-    if (delta == 0) {
-        return;
+/* Taps the cell for up to *budget detents of *backlog. */
+static void tap_cells(int32_t *backlog, bool vertical, uint8_t *budget) {
+    while (*backlog != 0 && *budget > 0) {
+        uint16_t kc  = cell_kc_for(*backlog, vertical);
+        keypos_t key = identity_pos(kc);
+        uint16_t t   = timer_read() | 1;
+        mouse_inject_begin();
+        action_exec((keyevent_t){.key = key, .type = KEY_EVENT, .pressed = true, .time = t});
+        action_exec((keyevent_t){.key = key, .type = KEY_EVENT, .pressed = false, .time = t});
+        mouse_inject_end();
+        *backlog -= cell_detent(kc);
+        (*budget)--;
     }
-    int16_t  amount = (int16_t)(delta > INT16_MAX ? INT16_MAX : (delta < -INT16_MAX ? -INT16_MAX : delta));
-    uint16_t kc     = cell_kc_for(delta, vertical);
-    int      c      = (int)(kc - KC_MS_WH_UP);
-    if (cells[c].count == CELL_QUEUE) {
-        /* Taps are backed up: add to the newest one instead of another. */
-        uint8_t last  = (uint8_t)((cells[c].head + cells[c].count - 1) % CELL_QUEUE);
-        int32_t sum   = (int32_t)cells[c].amount[last] + amount;
-        cells[c].amount[last] = (int16_t)(sum > INT16_MAX ? INT16_MAX : (sum < -INT16_MAX ? -INT16_MAX : sum));
-        return;
-    }
-    cells[c].amount[(cells[c].head + cells[c].count) % CELL_QUEUE] = amount;
-    cells[c].count++;
-    cells[c].releases++;
-
-    keypos_t key = identity_pos(kc);
-    uint16_t t   = timer_read() | 1;
-    mouse_inject_begin();
-    action_exec((keyevent_t){.key = key, .type = KEY_EVENT, .pressed = true, .time = t});
-    action_exec((keyevent_t){.key = key, .type = KEY_EVENT, .pressed = false, .time = t});
-    mouse_inject_end();
 }
 
+/* One tap per detent, like an encoder: whatever the cell holds runs once per
+ * click, and a tap QMK holds back (tap-hold deciding) still means exactly one
+ * detent when it comes out. A fast spin taps over a few scans. */
 void wheel_scan_end(void) {
-    int32_t w = batch_wheel, p = batch_pan;
-    batch_wheel = 0;
-    batch_pan   = 0;
-    tap_cell(w, true);
-    tap_cell(p, false);
+    uint8_t budget = TAPS_PER_SCAN;
+    tap_cells(&backlog_wheel, true, &budget);
+    tap_cells(&backlog_pan, false, &budget);
 }
 
-bool wheel_is_injected(const keyrecord_t *record) {
-    int c = cell_at(record->event.key);
-    if (c < 0 || !IS_KEYEVENT(record->event)) {
-        return false;
-    }
-    return record->event.pressed ? cells[c].count > 0 : cells[c].releases > 0;
-}
-
-static void repeat_start(uint16_t kc) {
-    repeat_kc      = kc;
-    repeat_since   = timer_read();
-    repeat_started = false;
+bool wheel_is_cell_event(const keyrecord_t *record) {
+    return IS_KEYEVENT(record->event) && cell_at(record->event.key) != KC_NO;
 }
 
 bool wheel_process_record(uint16_t keycode, keyrecord_t *record) {
     bool pressed = record->event.pressed;
-    if (wheel_is_injected(record)) {
-        int c = cell_at(record->event.key);
-        if (pressed) {
-            int16_t amount = cells[c].amount[cells[c].head];
-            cells[c].head  = (uint8_t)((cells[c].head + 1) % CELL_QUEUE);
-            cells[c].count--;
-            if (IS_MOUSEKEY_WHEEL(keycode)) {
-                scroll_from_cell((uint16_t)(KC_MS_WH_UP + c), keycode, amount);
-                return false;
-            }
-            return true; /* something else is mapped there: QMK taps it */
+    if (wheel_is_cell_event(record)) {
+        /* Only wheel_scan_end taps these cells (no device sends those usages
+         * as keys). A WH_* key there scrolls one detent per tap, without
+         * repeat; anything else is QMK's to run. */
+        if (!IS_MOUSEKEY_WHEEL(keycode)) {
+            return true;
         }
-        cells[c].releases--;
-        return !IS_MOUSEKEY_WHEEL(keycode);
+        if (pressed) {
+            scroll_from_cell(cell_at(record->event.key), keycode);
+        }
+        return false;
     }
     if (!IS_MOUSEKEY_WHEEL(keycode)) {
         return true;
@@ -225,8 +208,10 @@ bool wheel_process_record(uint16_t keycode, keyrecord_t *record) {
     /* A key mapped to WH_*: one detent now, then QMK's wheel repeat timing
      * (delay and interval from QMK Settings), one detent per step. */
     if (pressed) {
-        scroll_as(keycode, 1);
-        repeat_start(keycode);
+        scroll_as(keycode);
+        repeat_kc      = keycode;
+        repeat_since   = timer_read();
+        repeat_started = false;
     } else if (repeat_kc == keycode) {
         repeat_kc = KC_NO;
     }
@@ -244,15 +229,14 @@ void wheel_task(void) {
     }
     repeat_started = true;
     repeat_since   = timer_read();
-    scroll_as(repeat_kc, 1);
+    scroll_as(repeat_kc);
 #endif
 }
 
 void wheel_reset(void) {
-    batch_wheel = 0;
-    batch_pan   = 0;
-    repeat_kc   = KC_NO;
-    /* Taps still inside QMK keep their queue entries: they will arrive. */
+    backlog_wheel = 0;
+    backlog_pan   = 0;
+    repeat_kc     = KC_NO;
 }
 
 /* patches/0003: QMK's own mousekey reports come here instead of going

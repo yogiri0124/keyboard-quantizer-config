@@ -9,11 +9,12 @@
  * device a report belongs to.
  *
  * The ring keeps room for mounts and unmounts. If reports fill the rest
- * (core0 stuck in a long macro, say), core1 keeps only the newest report per
- * interface in a side slot: a keyboard or button report is the full state,
- * so the newest one is the one that must not be lost, while the cursor motion
- * of the skipped ones is. Each slot remembers where in the ring it belongs,
- * and core0 hands it out exactly there, so order is kept.
+ * (core0 stuck in a long macro, say), core1 keeps only the newest of each
+ * report (interface and Report ID) in a side slot: a keyboard, button or
+ * media report is the full state of its part, so the newest one is the one
+ * that must not be lost, while the cursor motion of the skipped ones is.
+ * Each slot remembers where in the ring it belongs, and core0 hands it out
+ * exactly there, so order is kept.
  *
  * One producer (core1), one consumer (core0). Pure C plus two hooks for the
  * memory barrier and a short wait, so it runs on the host for tests. */
@@ -25,7 +26,7 @@
 
 #define HIDQ_RING_BYTES 16384u /* power of two */
 #define HIDQ_RESERVE_BYTES 4096u /* kept free for mount / unmount */
-#define HIDQ_SLOTS 8             /* interfaces that can hold an overflow report */
+#define HIDQ_SLOTS 16            /* reports (interface + Report ID) that can hold an overflow report */
 #define HIDQ_REPORT_MAX 64
 #define HIDQ_DESC_MAX 256
 

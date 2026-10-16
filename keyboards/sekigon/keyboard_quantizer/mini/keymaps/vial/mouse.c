@@ -24,9 +24,6 @@
 #include "settings.h"
 #include "wheel.h"
 
-/* On layer 0 the gesture keys use layer 1's cells: layer 0 is the plain
- * identity keymap. */
-#define GESTURE_BASE_LAYER_FALLBACK 1
 #define SLOW_SCROLL_MUL 4
 /* How long a layer's gesture cells are trusted before reading them again
  * (Vial can change them at any time). */
@@ -152,7 +149,6 @@ typedef struct {
     bool     valid;
     bool     mapped;    /* any gesture cell has a key */
     bool     ball_free; /* the four ball-direction cells are empty */
-    uint8_t  diagonals; /* gesture_cfg_t.diagonals */
 } layer_info_t;
 
 static layer_info_t layer_info;
@@ -165,13 +161,9 @@ static const layer_info_t *gesture_cells(uint8_t layer) {
     layer_info.read_at   = timer_read();
     layer_info.valid     = true;
     layer_info.mapped    = false;
-    layer_info.diagonals = 0;
     for (uint8_t d = 0; d < GESTURE_DIR_COUNT; d++) {
-        if (layer != 0 && is_action_keycode(cell_keycode(layer, gesture_pos((gesture_dir_t)d)))) {
+        if (is_action_keycode(cell_keycode(layer, gesture_pos((gesture_dir_t)d)))) {
             layer_info.mapped = true;
-            if (d >= GESTURE_UP_RIGHT) {
-                layer_info.diagonals |= (uint8_t)(1u << (d - GESTURE_UP_RIGHT));
-            }
         }
     }
     static const uint16_t ball_cells[] = {KC_MS_UP, KC_MS_DOWN, KC_MS_LEFT, KC_MS_RIGHT};
@@ -194,14 +186,6 @@ static bool gesture_by_layout(void) {
     }
     const layer_info_t *li = gesture_cells(layer);
     return li->mapped && li->ball_free;
-}
-
-static uint8_t gesture_layer(void) {
-    uint8_t layer = active_layer();
-    if (modes_active(KQ_MODE_GESTURE) && layer == 0) {
-        return GESTURE_BASE_LAYER_FALLBACK;
-    }
-    return layer;
 }
 
 static ball_mode_t ball_mode(void) {
@@ -228,28 +212,38 @@ static ball_mode_t sync_ball_mode(void) {
     return mode;
 }
 
-/* Same path as a Vial remap on a real key, so LCTL(kc), tap dances and
- * macros all work from a gesture cell. */
-static void tap_keycode(uint16_t kc) {
-    mouse_inject_begin();
-    uint16_t saved                = g_vial_magic_keycode_override;
-    g_vial_magic_keycode_override = kc;
-    keypos_t magic                = {.row = VIAL_MATRIX_MAGIC, .col = VIAL_MATRIX_MAGIC};
-    action_exec((keyevent_t){.type = KEY_EVENT, .key = magic, .pressed = true, .time = timer_read() | 1});
-    qs_wait_ms(QS_tap_code_delay);
-    action_exec((keyevent_t){.type = KEY_EVENT, .key = magic, .pressed = false, .time = timer_read() | 1});
-    g_vial_magic_keycode_override = saved;
-    mouse_inject_end();
+/* The key a gesture cell holds, resolved the way QMK will resolve its tap:
+ * through the active layers (a transparent cell falls through), layer 0
+ * reading layer 1's cells (keymap.c). */
+static uint16_t gesture_keycode(gesture_dir_t d) {
+    keypos_t pos = gesture_pos(d);
+    return keymap_key_to_keycode(layer_switch_get_layer(pos), pos);
 }
 
+/* Diagonals take part only where a key is mapped. */
+static uint8_t mapped_diagonals(void) {
+    uint8_t mask = 0;
+    for (uint8_t d = GESTURE_UP_RIGHT; d < GESTURE_DIR_COUNT; d++) {
+        if (is_action_keycode(gesture_keycode((gesture_dir_t)d))) {
+            mask |= (uint8_t)(1u << (d - GESTURE_UP_RIGHT));
+        }
+    }
+    return mask;
+}
+
+/* Taps the gesture cell itself, like a key: whatever is mapped there runs,
+ * tap dances and LCTL(kc) included, and if QMK holds the tap back while a
+ * tap-hold key decides, it still resolves to that cell's key later. */
 static void fire_gesture(gesture_dir_t d) {
-    if (d == GESTURE_NONE || mouse_injecting()) {
+    if (d == GESTURE_NONE || mouse_injecting() || !is_action_keycode(gesture_keycode(d))) {
         return;
     }
-    uint16_t kc = cell_keycode(gesture_layer(), gesture_pos(d));
-    if (is_action_keycode(kc)) {
-        tap_keycode(kc);
-    }
+    keypos_t pos = gesture_pos(d);
+    mouse_inject_begin();
+    action_exec((keyevent_t){.type = KEY_EVENT, .key = pos, .pressed = true, .time = timer_read() | 1});
+    qs_wait_ms(QS_tap_code_delay);
+    action_exec((keyevent_t){.type = KEY_EVENT, .key = pos, .pressed = false, .time = timer_read() | 1});
+    mouse_inject_end();
 }
 
 static int32_t scroll_divisor(void) {
@@ -269,7 +263,7 @@ void kq_mouse_report(const hid_mouse_t *m) {
             send_wanted = true;
             break;
         case BALL_GESTURE: {
-            gesture_cfg_t cfg = {settings_get(SETTING_GESTURE_STEP), gesture_cells(gesture_layer())->diagonals};
+            gesture_cfg_t cfg = {settings_get(SETTING_GESTURE_STEP), mapped_diagonals()};
             fire_gesture(gesture_move(&gesture, &cfg, m->x, m->y, timer_read()));
             break;
         }

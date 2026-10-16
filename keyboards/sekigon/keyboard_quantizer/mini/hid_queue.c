@@ -22,6 +22,7 @@ static volatile uint32_t ring_tail; /* written by core1 */
 typedef struct {
     volatile uint32_t seq; /* odd while core1 writes */
     uint8_t           interface;
+    uint8_t           report_id; /* 0 when the device uses none */
     bool              valid;
     uint16_t          len;
     uint32_t          pos;   /* ring position this report belongs at */
@@ -34,6 +35,7 @@ static slot_t slots[HIDQ_SLOTS];
 /* Core1 only. */
 static bool     overflow;
 static uint32_t stamp_counter;
+static uint8_t  uses_ids[256 / 8]; /* per interface, from its descriptor */
 /* Core0 only. */
 static uint32_t taken_seq[HIDQ_SLOTS];
 
@@ -78,12 +80,45 @@ static bool push_record(uint8_t type, uint8_t interface, const uint8_t *data, ui
     return true;
 }
 
-static slot_t *slot_for(uint8_t interface) {
+/* Whether a descriptor declares Report IDs (then the first byte of every
+ * report names it). */
+static bool declares_report_ids(const uint8_t *desc, uint16_t len) {
+    uint16_t pos = 0;
+    while (desc != NULL && pos < len) {
+        uint8_t prefix = desc[pos];
+        if (prefix == 0xFE) { /* long item */
+            if (pos + 1 >= len) {
+                break;
+            }
+            pos = (uint16_t)(pos + 3 + desc[pos + 1]);
+            continue;
+        }
+        if ((prefix & 0xFC) == 0x84) {
+            return true;
+        }
+        uint8_t bytes = (uint8_t)(prefix & 0x03);
+        pos           = (uint16_t)(pos + 1 + (bytes == 3 ? 4 : bytes));
+    }
+    return false;
+}
+
+static bool interface_uses_ids(uint8_t interface) {
+    return (uses_ids[interface / 8] >> (interface % 8)) & 1;
+}
+
+static void set_uses_ids(uint8_t interface, bool on) {
+    uint8_t bit = (uint8_t)(1u << (interface % 8));
+    uses_ids[interface / 8] = on ? (uint8_t)(uses_ids[interface / 8] | bit) : (uint8_t)(uses_ids[interface / 8] & ~bit);
+}
+
+/* One slot per report (interface and Report ID): each report carries its
+ * own state, so a newer mouse report must not replace a consumer release. */
+static slot_t *slot_for(uint8_t interface, uint8_t report_id) {
     slot_t *spare = NULL;
     slot_t *oldest = &slots[0];
     for (uint8_t i = 0; i < HIDQ_SLOTS; i++) {
         slot_t *s = &slots[i];
-        if (s->valid && s->interface == interface) {
+        if (s->valid && s->interface == interface && s->report_id == report_id) {
             return s;
         }
         if (!s->valid && spare == NULL) {
@@ -97,10 +132,12 @@ static slot_t *slot_for(uint8_t interface) {
 }
 
 static void write_slot(uint8_t interface, const uint8_t *data, uint16_t len) {
-    slot_t *s = slot_for(interface);
+    uint8_t id = interface_uses_ids(interface) ? data[0] : 0;
+    slot_t *s  = slot_for(interface, id);
     s->seq++;
     hidq_barrier();
     s->interface = interface;
+    s->report_id = id;
     s->len       = len;
     s->pos       = ring_tail;
     s->stamp     = ++stamp_counter;
@@ -152,6 +189,7 @@ void hidq_push_mount(uint8_t interface, const uint8_t *desc, uint16_t len) {
     if (len > HIDQ_DESC_MAX) {
         len = HIDQ_DESC_MAX;
     }
+    set_uses_ids(interface, declares_report_ids(desc, len));
     push_event(HIDQ_MOUNT, interface, desc, len);
 }
 
@@ -168,6 +206,7 @@ void hidq_push_unmount(uint8_t interface) {
             s->seq++;
         }
     }
+    set_uses_ids(interface, false);
     push_event(HIDQ_UNMOUNT, interface, NULL, 0);
 }
 
@@ -196,7 +235,13 @@ static int due_slot(uint32_t head) {
     return best;
 }
 
-static bool read_slot(int i, hidq_event_t *ev) {
+typedef enum { SLOT_TAKEN, SLOT_CHANGED, SLOT_BUSY } slot_read_t;
+
+/* Copies slot i if, in one consistent snapshot, it is still a pending
+ * report due at head. Core1 may have replaced it since due_slot() chose it
+ * (a newer report, at a later position): then it must be chosen again, not
+ * handed out ahead of older ring records. */
+static slot_read_t read_slot(int i, uint32_t head, hidq_event_t *ev) {
     slot_t *s = &slots[i];
     for (int tries = 0; tries < SLOT_READ_TRIES; tries++) {
         uint32_t seq = s->seq;
@@ -205,18 +250,24 @@ static bool read_slot(int i, hidq_event_t *ev) {
             continue;
         }
         hidq_barrier();
-        uint16_t len = s->len > HIDQ_REPORT_MAX ? HIDQ_REPORT_MAX : s->len;
-        ev->type      = HIDQ_REPORT;
-        ev->interface = s->interface;
-        ev->len       = len;
+        bool     valid = s->valid;
+        uint32_t pos   = s->pos;
+        uint16_t len   = s->len > HIDQ_REPORT_MAX ? HIDQ_REPORT_MAX : s->len;
+        ev->type       = HIDQ_REPORT;
+        ev->interface  = s->interface;
+        ev->len        = len;
         memcpy(ev->data, s->data, len);
         hidq_barrier();
-        if (s->seq == seq) {
-            taken_seq[i] = seq;
-            return true;
+        if (s->seq != seq) {
+            continue; /* torn: read again */
         }
+        if (!valid || seq == taken_seq[i] || (int32_t)(head - pos) < 0) {
+            return SLOT_CHANGED;
+        }
+        taken_seq[i] = seq;
+        return SLOT_TAKEN;
     }
-    return false;
+    return SLOT_BUSY;
 }
 
 bool hidq_pop(hidq_event_t *ev) {
@@ -227,9 +278,13 @@ bool hidq_pop(hidq_event_t *ev) {
         uint32_t head = ring_head;
         int      due  = due_slot(head);
         if (due >= 0) {
-            /* If core1 keeps replacing it, try again on the next scan rather
+            slot_read_t r = read_slot(due, head, ev);
+            if (r == SLOT_CHANGED) {
+                continue;
+            }
+            /* Busy: core1 keeps rewriting it. Try on the next scan rather
              * than hand out a newer ring record first. */
-            return read_slot(due, ev);
+            return r == SLOT_TAKEN;
         }
         if (head == tail) {
             return false;
@@ -263,5 +318,6 @@ void hidq_reset(void) {
     stamp_counter = 0;
     memset(slots, 0, sizeof(slots));
     memset(taken_seq, 0, sizeof(taken_seq));
+    memset(uses_ids, 0, sizeof(uses_ids));
     memset(&stats, 0, sizeof(stats));
 }
