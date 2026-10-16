@@ -1,0 +1,37 @@
+diff --git a/quantum/action_tapping.c b/quantum/action_tapping.c
+index b1d23a9057..a5bb4b9165 100644
+--- a/quantum/action_tapping.c
++++ b/quantum/action_tapping.c
+@@ -461,6 +461,16 @@ bool waiting_buffer_enq(keyrecord_t record) {
+     return true;
+ }
+ 
++/** \brief Room left in the waiting buffer
++ *
++ * Events a keyboard injects with action_exec() wait here while a tap-hold
++ * key is undecided, and an overflow clears the whole keyboard. This lets
++ * such a keyboard hold its own events back instead.
++ */
++uint8_t action_tapping_waiting_room(void) {
++    return (uint8_t)((waiting_buffer_tail + WAITING_BUFFER_SIZE - 1 - waiting_buffer_head) % WAITING_BUFFER_SIZE);
++}
++
+ /** \brief Waiting buffer clear
+  *
+  * FIXME: Needs docs
+diff --git a/quantum/action_tapping.h b/quantum/action_tapping.h
+index 6b518b8298..d872a41e33 100644
+--- a/quantum/action_tapping.h
++++ b/quantum/action_tapping.h
+@@ -38,6 +38,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ uint16_t get_record_keycode(keyrecord_t *record, bool update_layer_cache);
+ uint16_t get_event_keycode(keyevent_t event, bool update_layer_cache);
+ void     action_tapping_process(keyrecord_t record);
++uint8_t  action_tapping_waiting_room(void);
++#else
++static inline uint8_t action_tapping_waiting_room(void) {
++    return 255;
++}
+ #endif
+ 
+ uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record);

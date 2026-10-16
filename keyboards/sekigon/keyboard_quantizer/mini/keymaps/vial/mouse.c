@@ -12,6 +12,7 @@
 #include "vial.h"
 #include "dynamic_keymap.h"
 #include "qmk_settings.h"
+#include "action_tapping.h"
 
 #include "mouse.h"
 #include "gesture.h"
@@ -39,6 +40,9 @@ static pointer_t   pointer;
 static gesture_t   gesture;
 static ball_mode_t last_mode = BALL_CURSOR;
 static uint8_t     inject_depth;
+/* A gesture tap that had to wait for room in QMK's tap-hold queue. */
+static gesture_dir_t deferred_dir = GESTURE_NONE;
+static uint8_t       deferred_taps;
 
 /* ---------------------------------------------------------------- send */
 
@@ -233,10 +237,11 @@ static uint8_t mapped_diagonals(void) {
 
 /* Taps the gesture cell itself, like a key: whatever is mapped there runs,
  * tap dances and LCTL(kc) included, and if QMK holds the tap back while a
- * tap-hold key decides, it still resolves to that cell's key later. */
-static void fire_gesture(gesture_dir_t d) {
-    if (d == GESTURE_NONE || mouse_injecting() || !is_action_keycode(gesture_keycode(d))) {
-        return;
+ * tap-hold key decides, it still resolves to that cell's key later. False
+ * if QMK's queue for that has no room (patches/0004). */
+static bool tap_gesture_cell(gesture_dir_t d) {
+    if (action_tapping_waiting_room() < 2) {
+        return false;
     }
     keypos_t pos = gesture_pos(d);
     mouse_inject_begin();
@@ -244,6 +249,29 @@ static void fire_gesture(gesture_dir_t d) {
     qs_wait_ms(QS_tap_code_delay);
     action_exec((keyevent_t){.type = KEY_EVENT, .key = pos, .pressed = false, .time = timer_read() | 1});
     mouse_inject_end();
+    return true;
+}
+
+/* Taps that waited go first, in order. A different direction cannot follow
+ * waiting taps (a stroke keeps one direction; a new stroke drops them). */
+static void flush_deferred_gestures(void) {
+    while (deferred_taps > 0 && tap_gesture_cell(deferred_dir)) {
+        deferred_taps--;
+    }
+}
+
+static void fire_gesture(gesture_dir_t d) {
+    if (d == GESTURE_NONE || mouse_injecting() || !is_action_keycode(gesture_keycode(d))) {
+        return;
+    }
+    if (deferred_dir != d) {
+        deferred_taps = 0;
+        deferred_dir  = d;
+    }
+    if (deferred_taps < GESTURE_BACKLOG_MAX) {
+        deferred_taps++;
+    }
+    flush_deferred_gestures();
 }
 
 static int32_t scroll_divisor(void) {
@@ -283,7 +311,10 @@ void kq_mouse_report(const hid_mouse_t *m) {
 void kq_mouse_scan_end(void) {
     wheel_scan_end();
     if (sync_ball_mode() == BALL_GESTURE) {
+        flush_deferred_gestures();
         fire_gesture(gesture_poll(&gesture, timer_read()));
+    } else {
+        deferred_taps = 0;
     }
 }
 
@@ -308,10 +339,11 @@ void mouse_reset_latches(void) {
     scroll_out_reset();
     pointer_reset(&pointer);
     gesture_reset(&gesture);
-    pending_x   = 0;
-    pending_y   = 0;
-    last_mode   = BALL_CURSOR;
-    send_wanted = true; /* drag-lock buttons are gone */
+    deferred_taps = 0;
+    pending_x     = 0;
+    pending_y     = 0;
+    last_mode     = BALL_CURSOR;
+    send_wanted   = true; /* drag-lock buttons are gone */
 }
 
 void mouse_reset_settings_and_latches(void) {
