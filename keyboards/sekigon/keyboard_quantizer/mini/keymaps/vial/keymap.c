@@ -26,8 +26,10 @@
 #include "mouse_keys.h"
 #include "settings.h"
 
-/* The default keymap (keymaps[]) is default.vil, the layout as Vial saves
- * it, built in: see default_config.c. */
+/* The default keymap (keymaps[]): default.vil, the layout as Vial saves it,
+ * built in (see default_config.c). */
+#define KQ_DEFAULT_KEYMAP
+#include "default_config.h"
 
 /* QMK's keycode lookup (quantum/keymap_common.c), with one addition: layer
  * 0's gesture cells are layer 1's. Gestures tap their cell like a key

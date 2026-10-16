@@ -3,9 +3,10 @@
 
     vil_to_c.py default.vil quantum/vial_ensure_keycode.h > default_config.h
 
-The header defines the default keymap (QMK's keymaps[]) and the tap dances,
-combos, key overrides, macros and QMK Settings that default_config.c writes
-when the saved configuration is reset. Keycode names are resolved to numbers
+The header holds two parts: with KQ_DEFAULT_KEYMAP defined, the default
+keymap (QMK's keymaps[], which QMK wants in keymap.c); with KQ_DEFAULT_DATA,
+the tap dances, combos, key overrides, macros and QMK Settings that
+default_config.c writes when the saved configuration is reset. Keycode names are resolved to numbers
 here, from the names Vial itself uses (the _Static_assert table in the QMK
 tree's quantum/vial_ensure_keycode.h), so the .vil works as saved by Vial.
 """
@@ -134,6 +135,7 @@ def main():
     w('_Static_assert(MATRIX_ROWS == %d && MATRIX_COLS == %d, "default.vil matrix size");'
       % (len(layers[0]), len(layers[0][0])))
     w('')
+    w('#ifdef KQ_DEFAULT_KEYMAP')
     w('const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {')
     for layer in layers:
         w('    {')
@@ -141,7 +143,9 @@ def main():
             w('        {' + ', '.join('0x%04X' % resolve(k) for k in row) + '},')
         w('    },')
     w('};')
+    w('#endif')
     w('')
+    w('#ifdef KQ_DEFAULT_DATA')
 
     td = last_used(vil.get('tap_dance', []), lambda t: all(resolve(k) == 0 for k in t[:4]))
     w('static const vial_tap_dance_entry_t kq_default_tap_dance[] = {')
@@ -186,6 +190,7 @@ def main():
     for qsid, value in settings:
         w('    {%d, %d},' % (qsid, value))
     w('};')
+    w('#endif')
     print('\n'.join(out))
     return 0
 

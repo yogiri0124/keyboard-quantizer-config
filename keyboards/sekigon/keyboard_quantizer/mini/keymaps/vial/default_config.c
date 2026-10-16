@@ -17,6 +17,7 @@
 #include "dynamic_keymap.h"
 #include "qmk_settings.h"
 
+#define KQ_DEFAULT_DATA
 #include "default_config.h"
 
 _Static_assert(KQ_DEFAULT_TAP_DANCE_COUNT <= VIAL_TAP_DANCE_ENTRIES, "default.vil has too many tap dances");
