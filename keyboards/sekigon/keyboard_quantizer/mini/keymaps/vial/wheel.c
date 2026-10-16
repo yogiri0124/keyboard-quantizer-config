@@ -7,7 +7,6 @@
 #    include "mousekey.h"
 #endif
 #include "usb_main.h" /* mouse endpoint state: this board is ChibiOS only */
-#include "action_tapping.h"
 
 #include "wheel.h"
 #include "identity.h"
@@ -161,11 +160,10 @@ void wheel_physical(int16_t wheel, int16_t pan) {
     add_backlog(&backlog_pan, pan);
 }
 
-/* Taps the cell for up to *budget detents of *backlog. While a tap-hold
- * key is undecided QMK queues events, and overflowing that queue would clear
- * every key: what does not fit waits in the backlog (patches/0004). */
+/* Taps the cell for up to *budget detents of *backlog; what does not fit in
+ * QMK's queues right now waits in the backlog (mouse_can_tap). */
 static void tap_cells(int32_t *backlog, bool vertical, uint8_t *budget) {
-    while (*backlog != 0 && *budget > 0 && action_tapping_waiting_room() >= 2) {
+    while (*backlog != 0 && *budget > 0 && mouse_can_tap()) {
         uint16_t kc  = cell_kc_for(*backlog, vertical);
         keypos_t key = identity_pos(kc);
         uint16_t t   = timer_read() | 1;

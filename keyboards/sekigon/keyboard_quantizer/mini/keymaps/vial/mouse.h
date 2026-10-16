@@ -28,6 +28,10 @@ uint8_t mouse_sent_buttons(void);
 void mouse_inject_begin(void);
 void mouse_inject_end(void);
 bool mouse_injecting(void);
+/* Whether one more injected tap (press and release) fits in QMK's queues
+ * right now (patches/0004): while a tap-hold key is undecided, QMK queues
+ * events, and overflowing that queue would clear every key. */
+bool mouse_can_tap(void);
 
 void mouse_reset_latches(void);              /* CLR, unplug */
 void mouse_reset_settings_and_latches(void); /* RST */

@@ -35,3 +35,34 @@ index 6b518b8298..d872a41e33 100644
  #endif
  
  uint16_t get_tapping_term(uint16_t keycode, keyrecord_t *record);
+diff --git a/quantum/process_keycode/process_combo.c b/quantum/process_keycode/process_combo.c
+index c18442446e..65997c56ec 100644
+--- a/quantum/process_keycode/process_combo.c
++++ b/quantum/process_keycode/process_combo.c
+@@ -112,6 +112,13 @@ typedef struct {
+ static uint8_t         key_buffer_size = 0;
+ static queued_record_t key_buffer[COMBO_KEY_BUFFER_LENGTH];
+ 
++/* Key events a pending combo holds. When it resolves without firing they
++ * are replayed through action_tapping_process() and may need room in its
++ * waiting buffer, so a keyboard injecting events counts them too. */
++uint8_t combo_buffered_events(void) {
++    return key_buffer_size;
++}
++
+ typedef struct {
+     uint16_t combo_index;
+ } queued_combo_t;
+diff --git a/quantum/process_keycode/process_combo.h b/quantum/process_keycode/process_combo.h
+index f1d534236e..222a539ca0 100644
+--- a/quantum/process_keycode/process_combo.h
++++ b/quantum/process_keycode/process_combo.h
+@@ -77,6 +77,8 @@ bool process_combo(uint16_t keycode, keyrecord_t *record);
+ void combo_task(void);
+ void process_combo_event(uint16_t combo_index, bool pressed);
+ 
++uint8_t combo_buffered_events(void);
++
+ void combo_enable(void);
+ void combo_disable(void);
+ void combo_toggle(void);

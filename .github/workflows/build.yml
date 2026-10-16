@@ -73,6 +73,9 @@ jobs:
             [ -d "$path" ] && cp -a "$path" ../qmk/
           done
           cd ../qmk
+          # The default configuration, from the layout file Vial saves.
+          vial=keyboards/sekigon/keyboard_quantizer/mini/keymaps/vial
+          python3 ../config/tools/vil_to_c.py "$vial/default.vil" quantum/vial_ensure_keycode.h > "$vial/default_config.h"
           git status --short
 
       - name: Apply core patches

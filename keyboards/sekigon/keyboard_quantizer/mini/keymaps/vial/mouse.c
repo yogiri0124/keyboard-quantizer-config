@@ -13,6 +13,9 @@
 #include "dynamic_keymap.h"
 #include "qmk_settings.h"
 #include "action_tapping.h"
+#ifdef COMBO_ENABLE
+#    include "process_combo.h"
+#endif
 
 #include "mouse.h"
 #include "gesture.h"
@@ -133,6 +136,15 @@ bool mouse_injecting(void) {
     return inject_depth != 0;
 }
 
+bool mouse_can_tap(void) {
+    uint8_t need = 2; /* press and release */
+#ifdef COMBO_ENABLE
+    /* A pending combo replays the keys it holds through the same queue. */
+    need += combo_buffered_events();
+#endif
+    return action_tapping_waiting_room() >= need;
+}
+
 /* ------------------------------------------------------- ball / layers */
 
 static uint8_t active_layer(void) {
@@ -237,26 +249,24 @@ static uint8_t mapped_diagonals(void) {
 
 /* Taps the gesture cell itself, like a key: whatever is mapped there runs,
  * tap dances and LCTL(kc) included, and if QMK holds the tap back while a
- * tap-hold key decides, it still resolves to that cell's key later. False
- * if QMK's queue for that has no room (patches/0004). */
-static bool tap_gesture_cell(gesture_dir_t d) {
-    if (action_tapping_waiting_room() < 2) {
-        return false;
-    }
+ * tap-hold key decides, it still resolves to that cell's key later. */
+static void tap_gesture_cell(gesture_dir_t d) {
     keypos_t pos = gesture_pos(d);
     mouse_inject_begin();
     action_exec((keyevent_t){.type = KEY_EVENT, .key = pos, .pressed = true, .time = timer_read() | 1});
     qs_wait_ms(QS_tap_code_delay);
     action_exec((keyevent_t){.type = KEY_EVENT, .key = pos, .pressed = false, .time = timer_read() | 1});
     mouse_inject_end();
-    return true;
 }
 
-/* Taps that waited go first, in order. A different direction cannot follow
- * waiting taps (a stroke keeps one direction; a new stroke drops them). */
+/* Taps that waited for room in QMK's queue go first, in order. A different
+ * direction cannot follow waiting taps (a stroke keeps one direction; a new
+ * stroke drops them). */
 static void flush_deferred_gestures(void) {
-    while (deferred_taps > 0 && tap_gesture_cell(deferred_dir)) {
+    while (deferred_taps > 0 && mouse_can_tap()) {
+        /* Counted down first: the key may be CLR, which clears the count. */
         deferred_taps--;
+        tap_gesture_cell(deferred_dir);
     }
 }
 
