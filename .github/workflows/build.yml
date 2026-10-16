@@ -102,7 +102,8 @@ jobs:
           echo "Firmware version: $FW_VERSION"
           # The qmk_cli image sets QMK_USERSPACE, which makes QMK try to copy
           # the firmware into a userspace folder that does not exist here.
-          env -u QMK_USERSPACE make "${KEYBOARD}:${KEYMAP}" GIT_DESCRIBE="$FW_VERSION"
+          # -k: report every compile error in one run, not just the first.
+          env -u QMK_USERSPACE make -k "${KEYBOARD}:${KEYMAP}" GIT_DESCRIBE="$FW_VERSION"
           ls -l .build/*.uf2
 
       - name: Check HID descriptors

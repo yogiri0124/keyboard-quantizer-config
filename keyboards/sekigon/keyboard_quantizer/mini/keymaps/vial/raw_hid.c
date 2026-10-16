@@ -53,7 +53,7 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
     }
     // Vial via.c aliases 0x07/0x08/0x09 as lighting and never forwards channel 0.
     if (length >= 2 && is_custom_value_command(data[0]) && data[1] == id_custom_channel) {
-        via_custom_value_command_kb(data, length);
+        settings_via_command(data, length);
         raw_hid_send(data, length);
         return;
     }
@@ -73,11 +73,11 @@ void raw_hid_receive_kb(uint8_t *data, uint8_t length) {
 
     // VIA custom UI for Vial wraps set/get/save in id_unhandled.
     if (*command_id == id_unhandled && length > 2 && is_custom_value_command(data[1])) {
-        via_custom_value_command_kb(&data[1], (uint8_t)(length - 1));
+        settings_via_command(&data[1], (uint8_t)(length - 1));
         return;
     }
     if (is_custom_value_command(*command_id)) {
-        via_custom_value_command_kb(data, length);
+        settings_via_command(data, length);
         return;
     }
     *command_id = id_unhandled;
