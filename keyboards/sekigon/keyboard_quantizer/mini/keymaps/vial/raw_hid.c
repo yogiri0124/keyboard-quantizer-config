@@ -4,6 +4,7 @@
 #include "via.h"
 #include "vial.h"
 #include "settings.h"
+#include "default_config_write.h"
 
 extern void raw_hid_receive_vial(uint8_t *data, uint8_t length);
 extern void raw_hid_receive_qmk(uint8_t *data, uint8_t length);
@@ -57,10 +58,16 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
         raw_hid_send(data, length);
         return;
     }
+    uint8_t command = data[0];
     if (is_vial_enabled) {
         raw_hid_receive_vial(data, length);
     } else {
         raw_hid_receive_qmk(data, length);
+    }
+    /* A keymap reset (Vial / VIA) empties tap dances, combos, key overrides
+     * and QMK Settings too: put default.vil's back. */
+    if (command == id_dynamic_keymap_reset) {
+        default_config_write();
     }
 }
 

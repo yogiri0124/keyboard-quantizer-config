@@ -21,6 +21,7 @@
 #include "keymap_introspection.h"
 
 #include "cli.h"
+#include "default_config_write.h"
 #include "identity.h"
 #include "mouse.h"
 #include "mouse_keys.h"
@@ -67,9 +68,12 @@ void keyboard_pre_init_user(void) {
     print_set_sendchar(virtser_send_char);
 }
 
+/* QMK clears the EEPROM (first start, EE_CLR): it has just reset the VIA
+ * part to the bare keymap, so default.vil's other settings go in now. */
 void eeconfig_init_user(void) {
     mouse_reset_latches();
     settings_init();
+    default_config_write();
 }
 
 void keyboard_post_init_user(void) {
