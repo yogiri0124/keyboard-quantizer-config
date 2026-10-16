@@ -24,9 +24,6 @@
  * scans vanished. */
 #define DEBOUNCE 0
 
-#define MATRIX_COLS_DEFAULT 8
-#define MATRIX_MSGES_ROW 31
-
 #define MOUSE_EXTENDED_REPORT
 /* High-resolution wheel (patches/0002). A host that enables it splits a
  * detent into this many counts; one that does not keeps x1. 120 matches the

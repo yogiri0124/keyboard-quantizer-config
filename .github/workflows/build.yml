@@ -34,13 +34,12 @@ jobs:
           # Comments and blank lines are not valid in $GITHUB_ENV.
           grep -E '^[A-Za-z_][A-Za-z0-9_]*=' config/upstream.env | tr -d '\r' >> "$GITHUB_ENV"
 
-      - name: Test the HID parser on the host
-        # The Quantizer's descriptor/report parser, compiled for the runner
-        # and fed known descriptors (tools/parser_test).
+      - name: Host tests
+        # The plain-C parts of the firmware (HID parser, USB event queue,
+        # input -> matrix, ball modes, cursor, gesture, scroll output),
+        # compiled for the runner and checked against known cases.
         working-directory: config
-        run: |
-          cc -std=gnu11 -Wall -Werror -I tools/parser_test/include -o "$RUNNER_TEMP/parser_test" tools/parser_test/parser_test.c
-          "$RUNNER_TEMP/parser_test"
+        run: TMPDIR="$RUNNER_TEMP" sh tools/test/run.sh
 
       - name: Checkout upstream QMK tree
         run: |
@@ -62,6 +61,12 @@ jobs:
 
       - name: Overlay quantizer sources
         run: |
+          # Directories this repo owns completely: upstream's copies go first,
+          # so a file removed or renamed here cannot linger from upstream.
+          for path in keyboards/sekigon/keyboard_quantizer/parser \
+                      keyboards/sekigon/keyboard_quantizer/mini/keymaps/vial; do
+            rm -rf "qmk/$path"
+          done
           cd config
           # Everything except this repo's own metadata is a QMK path.
           for path in keyboards util; do

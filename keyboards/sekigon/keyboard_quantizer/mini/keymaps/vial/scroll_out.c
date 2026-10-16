@@ -5,7 +5,6 @@
 
 #include "scroll_out.h"
 #ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
-#    include "usb_main.h"
 #    define QUEUE_PER_DETENT (MOUSE_WHEEL_RESOLUTION_MULTIPLIER * 256)
 #else
 #    define QUEUE_PER_DETENT 256
@@ -27,17 +26,14 @@ static void add(int32_t *q, int64_t amount) {
     *q        = (int32_t)(v > QUEUE_LIMIT ? QUEUE_LIMIT : (v < -QUEUE_LIMIT ? -QUEUE_LIMIT : v));
 }
 
-int32_t scroll_out_multiplier(bool vertical) {
+static int32_t multiplier(int axis) {
 #ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
-    return usb_mouse_wheel_multiplier(vertical);
+    int32_t m = scroll_out_host_multiplier(axis == AXIS_V);
+    return m < 1 ? 1 : m;
 #else
-    (void)vertical;
+    (void)axis;
     return 1;
 #endif
-}
-
-static int32_t multiplier(int axis) {
-    return scroll_out_multiplier(axis == AXIS_V);
 }
 
 /* Whole host counts in q for an axis, toward zero. Exact: QUEUE_PER_DETENT
@@ -88,7 +84,7 @@ bool scroll_out_urgent_pending(void) {
     return counts(urgent, AXIS_V) != 0 || counts(urgent, AXIS_H) != 0;
 }
 
-static void flush_from(int32_t *q, report_mouse_t *mouse) {
+static void take_from(int32_t *q, int8_t *v, int8_t *h) {
     int8_t sent[2];
     for (int a = 0; a < 2; a++) {
         /* One reading of the multiplier for both steps: the host can change
@@ -99,20 +95,16 @@ static void flush_from(int32_t *q, report_mouse_t *mouse) {
         q[a] -= (int32_t)((int64_t)c * QUEUE_PER_DETENT / m);
         sent[a] = (int8_t)c;
     }
-    mouse->v = sent[AXIS_V];
-    mouse->h = sent[AXIS_H];
+    *v = sent[AXIS_V];
+    *h = sent[AXIS_H];
 }
 
-void scroll_out_flush(report_mouse_t *mouse) {
-    if (mouse != NULL) {
-        flush_from(scroll_out_urgent_pending() ? urgent : queue, mouse);
-    }
+void scroll_out_take(int8_t *v, int8_t *h) {
+    take_from(scroll_out_urgent_pending() ? urgent : queue, v, h);
 }
 
-void scroll_out_flush_urgent(report_mouse_t *mouse) {
-    if (mouse != NULL) {
-        flush_from(urgent, mouse);
-    }
+void scroll_out_take_urgent(int8_t *v, int8_t *h) {
+    take_from(urgent, v, h);
 }
 
 void scroll_out_reset(void) {

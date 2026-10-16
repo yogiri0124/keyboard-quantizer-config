@@ -8,8 +8,12 @@
 #include "debug.h"
 #include "bootloader.h"
 #include "pio_usb_ll.h"
-#include "quantizer_mouse.h"
-#include "keymap.h"
+#include "hid_desc.h"
+#include "hid_input.h"
+#include "hid_queue.h"
+#include "mouse.h"
+#include "scroll_out.h"
+#include "settings.h"
 
 #include <string.h>
 
@@ -78,7 +82,7 @@ static void onOvr(EmbeddedCli *cli, char *args, void *context) {
     (void)context;
     uint16_t n = embeddedCliGetTokenCount(args);
     if (n == 0) {
-        printf("ovr %s\n", user_os_override_name(user_os_override_get()));
+        printf("ovr %s\n", os_override_name(os_override_get()));
         return;
     }
     const char *cmd = embeddedCliGetToken(args, 1);
@@ -87,24 +91,25 @@ static void onOvr(EmbeddedCli *cli, char *args, void *context) {
         return;
     }
     if (strcmp(cmd, "off") == 0) {
-        user_os_override_set(KEY_OS_OVERRIDE_DISABLE);
+        os_override_set(OS_OVERRIDE_OFF);
     } else if (strcmp(cmd, "uj") == 0) {
-        user_os_override_set(US_KEY_JP_OS_OVERRIDE_DISABLE);
+        os_override_set(OS_OVERRIDE_US_ON_JP);
     } else if (strcmp(cmd, "ju") == 0) {
-        user_os_override_set(JP_KEY_US_OS_OVERRIDE_DISABLE);
+        os_override_set(OS_OVERRIDE_JP_ON_US);
     } else {
         ovr_cli_usage();
         return;
     }
-    printf("ovr %s\n", user_os_override_name(user_os_override_get()));
+    printf("ovr %s\n", os_override_name(os_override_get()));
 }
 
 static void mouse_cli_usage(void) {
     printf("mouse\n");
     printf("mouse reset\n");
-    printf("mouse scroll <%u-%u>\n", (unsigned)USER_SCROLL_DIV_MIN, (unsigned)USER_SCROLL_DIV_MAX);
-    printf("mouse dpi <%u-%u>\n", (unsigned)USER_CURSOR_SCALE_MIN, (unsigned)USER_CURSOR_SCALE_MAX);
-    printf("mouse thresh <%u-%u>\n", (unsigned)USER_GESTURE_THRESHOLD_MIN, (unsigned)USER_GESTURE_THRESHOLD_MAX);
+    for (uint8_t s = 0; s < SETTING_COUNT; s++) {
+        printf("mouse %s <%u-%u>\n", settings_name((setting_t)s), (unsigned)settings_min((setting_t)s),
+               (unsigned)settings_max((setting_t)s));
+    }
 }
 
 static bool parse_u8_token(const char *s, uint8_t *out) {
@@ -139,7 +144,7 @@ static void onMouse(EmbeddedCli *cli, char *args, void *context) {
         return;
     }
     if (strcmp(cmd, "reset") == 0) {
-        mouse_config_reset();
+        mouse_reset_settings_and_latches();
         mouse_cli_print();
         return;
     }
@@ -148,11 +153,87 @@ static void onMouse(EmbeddedCli *cli, char *args, void *context) {
         mouse_cli_usage();
         return;
     }
-    if (mouse_set_named_value(cmd, val)) {
+    if (settings_set_by_name(cmd, val)) {
         mouse_cli_print();
         return;
     }
     mouse_cli_usage();
+}
+
+static const char *kind_name(hid_kind_t k) {
+    switch (k) {
+        case HID_KIND_KEYBOARD:
+            return "keyboard";
+        case HID_KIND_MOUSE:
+            return "mouse";
+        case HID_KIND_CONSUMER:
+            return "consumer";
+        case HID_KIND_SYSTEM:
+            return "system";
+        default:
+            return "other";
+    }
+}
+
+/* The compiled descriptors: per interface, each input report and its
+ * fields (bit offset, size x count, flags C=constant V=variable R=relative,
+ * usage page, usages, logical range). */
+static void print_descriptors(void) {
+    uint8_t found = 0;
+    for (uint8_t i = 0; i < HID_DESC_DEVICES; i++) {
+        const hid_device_t *dev = hid_desc_device_at(i);
+        if (dev == NULL) {
+            continue;
+        }
+        found++;
+        printf("if:%u%s\n", (unsigned)dev->interface, dev->truncated ? " (table full: some fields left out)" : "");
+        for (uint8_t r = 0; r < dev->report_count; r++) {
+            const hid_report_t *rep = &dev->reports[r];
+            printf("  id:%u %s page:0x%04X usage:0x%04X bits:%u\n", (unsigned)rep->id, kind_name(rep->kind),
+                   (unsigned)rep->collection_page, (unsigned)rep->collection_usage, (unsigned)rep->bit_length);
+            for (uint8_t f = 0; f < dev->field_count; f++) {
+                const hid_field_t *fd = &dev->fields[f];
+                if (fd->report != r) {
+                    continue;
+                }
+                printf("    @%u %ux%u %c%c%c page:0x%04X", (unsigned)fd->bit_offset, (unsigned)fd->bit_size,
+                       (unsigned)fd->count, (fd->flags & HID_FIELD_CONSTANT) ? 'C' : '-',
+                       (fd->flags & HID_FIELD_VARIABLE) ? 'V' : '-', (fd->flags & HID_FIELD_RELATIVE) ? 'R' : '-',
+                       (unsigned)fd->usage_page);
+                if (fd->list_len > 0) {
+                    printf(" usages:");
+                    for (uint8_t u = 0; u < fd->list_len; u++) {
+                        printf("%s0x%04X", u ? "," : "", (unsigned)dev->usages[fd->list_start + u]);
+                    }
+                } else {
+                    printf(" usage:0x%04X-0x%04X", (unsigned)fd->usage_min, (unsigned)fd->usage_max);
+                }
+                printf(" logical:%ld..%ld\n", (long)fd->logical_min, (long)fd->logical_max);
+            }
+        }
+    }
+    if (found == 0) {
+        printf("no HID devices\n");
+    }
+}
+
+static void print_hid_stats(void) {
+    hid_input_stats_t s = hid_input_stats();
+    hidq_stats_t      q = hidq_stats();
+    printf("kb %u  mouse %u  consumer %u last=0x%04X  system %u last=0x%04X\n", (unsigned)s.keyboard,
+           (unsigned)s.mouse, (unsigned)s.consumer, (unsigned)s.last_consumer, (unsigned)s.system,
+           (unsigned)s.last_system);
+    printf("other %u last page=0x%04X  buttons 0x%04X  undefined 0x%04X  unknown %u\n", (unsigned)s.other,
+           (unsigned)s.last_other_page, (unsigned)s.last_buttons, (unsigned)s.last_undefined,
+           (unsigned)s.unknown_reports);
+    /* HID and QMK both mean "up" and "right" by a positive value; the ELECOM
+     * HUGE PLUS sends a left tilt as positive pan (see wheel.c). */
+    printf("wheel %d  pan %d  (last non-zero, as the device sent them)\n", (int)s.last_wheel, (int)s.last_pan);
+    /* What the PC asked for: x1 until Windows/Linux enable high resolution. */
+    printf("host wheel x%ld  pan x%ld\n", (long)scroll_out_host_multiplier(true),
+           (long)scroll_out_host_multiplier(false));
+    printf("queue reports %lu  overflow %lu  lost events %lu\n", (unsigned long)q.pushed_reports,
+           (unsigned long)q.slot_reports, (unsigned long)q.dropped_events);
 }
 
 static void onHid(EmbeddedCli *cli, char *args, void *context) {
@@ -160,10 +241,10 @@ static void onHid(EmbeddedCli *cli, char *args, void *context) {
     (void)context;
     const char *cmd = embeddedCliGetToken(args, 1);
     if (cmd != NULL && strcmp(cmd, "desc") == 0) {
-        hid_cli_print_desc();
+        print_descriptors();
         return;
     }
-    hid_cli_print();
+    print_hid_stats();
     if (cmd != NULL) {
         printf("hid desc  dump parsed report descriptor\n");
     }

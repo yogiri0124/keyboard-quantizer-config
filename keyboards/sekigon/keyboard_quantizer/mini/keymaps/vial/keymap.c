@@ -13,16 +13,19 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 #include QMK_KEYBOARD_H
 
 #include "virtser.h"
-#include "eeconfig.h"
 
-#include "keymap.h"
-#include "quantizer_mouse.h"
 #include "cli.h"
-#include "os_key_override.h"
+#include "mouse.h"
+#include "mouse_keys.h"
+#include "settings.h"
 
+/* The identity keymap (see identity.h): every cell sends the usage it
+ * stands for. Row 0 holds the modifiers; row 31 the gesture cells, empty
+ * on layer 0 (map them on layers 1-7). */
 const uint16_t keymaps[][MATRIX_ROWS][MATRIX_COLS] = {{
     {0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7},
     {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07},
@@ -55,94 +58,27 @@ const uint16_t keymaps[][MATRIX_ROWS][MATRIX_COLS] = {{
     {0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf},
     {0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7},
     {0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef},
-    /* Row 31: orange gesture slots. Layer 0 stays empty; put action keys on layers 1-7. */
     {KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO, KC_NO},
 }};
-user_config_t user_config;
 
-static void apply_os_override(uint8_t mode);
-
-int8_t virtser_send_wrap(uint8_t c) {
+static int8_t virtser_send_char(uint8_t c) {
     virtser_send(c);
     return 0;
 }
 
 void keyboard_pre_init_user(void) {
     cli_init();
-    print_set_sendchar(virtser_send_wrap);
+    print_set_sendchar(virtser_send_char);
 }
 
 void eeconfig_init_user(void) {
-    user_config.raw             = 0;
-    user_config.key_os_override = KEY_OS_OVERRIDE_DISABLE;
-    remove_all_os_key_overrides();
-    mouse_config_reset();
+    mouse_reset_latches();
+    settings_init();
 }
 
 void keyboard_post_init_user(void) {
-    os_key_override_init();
-
-    user_config.raw = eeconfig_read_user();
-    bool ovr_clamped = false;
-    if (user_config.key_os_override > JP_KEY_US_OS_OVERRIDE_DISABLE) {
-        user_config.key_os_override = KEY_OS_OVERRIDE_DISABLE;
-        ovr_clamped                 = true;
-    }
-    mouse_config_load();
-    if (ovr_clamped) {
-        mouse_config_save();
-    }
-    apply_os_override(user_config.key_os_override);
-}
-
-static void apply_os_override(uint8_t mode) {
-    switch (mode) {
-        case US_KEY_JP_OS_OVERRIDE_DISABLE:
-            register_us_key_on_jp_os_overrides();
-            break;
-        case JP_KEY_US_OS_OVERRIDE_DISABLE:
-            register_jp_key_on_us_os_overrides();
-            break;
-        default:
-            remove_all_os_key_overrides();
-            break;
-    }
-}
-
-const char *user_os_override_name(uint8_t mode) {
-    switch (mode) {
-        case US_KEY_JP_OS_OVERRIDE_DISABLE:
-            return "uj";
-        case JP_KEY_US_OS_OVERRIDE_DISABLE:
-            return "ju";
-        default:
-            return "off";
-    }
-}
-
-uint8_t user_os_override_get(void) {
-    return user_config.key_os_override;
-}
-
-void user_os_override_set(uint8_t mode) {
-    if (mode > JP_KEY_US_OS_OVERRIDE_DISABLE) {
-        mode = KEY_OS_OVERRIDE_DISABLE;
-    }
-    user_config.key_os_override = mode;
-    apply_os_override(mode);
-    mouse_config_save();
-}
-
-/* LCTL(kc) is QMK ACTION_MODS_KEY (weak mods). Do not steal it. */
-
-static void refresh_os_override_on_alt_gui_swap(void) {
-    /* GRV override is chosen at register time from Win/Mac swap. */
-    static int8_t last_swap = -1;
-    int8_t        swap      = keymap_config.swap_lalt_lgui ? 1 : 0;
-    if (last_swap >= 0 && swap != last_swap && user_config.key_os_override != KEY_OS_OVERRIDE_DISABLE) {
-        apply_os_override(user_config.key_os_override);
-    }
-    last_swap = swap;
+    mouse_init();
+    settings_load();
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
@@ -155,214 +91,6 @@ void post_process_record_user(uint16_t keycode, keyrecord_t *record) {
 
 void housekeeping_task_user(void) {
     mouse_housekeeping();
-    refresh_os_override_on_alt_gui_swap();
+    os_override_refresh();
     cli_exec();
-}
-
-#include <string.h>
-
-#include "vial.h"
-#include "dynamic_keymap.h"
-#include "send_string.h"
-
-#ifdef VIA_ENABLE   
-#    include "via.h"
-#    define DYNAMIC_KEYMAP_EEPROM_START (VIA_EEPROM_CONFIG_END)
-#else
-#    include "eeconfig.h"
-#    define DYNAMIC_KEYMAP_EEPROM_START (EECONFIG_SIZE)
-#endif
-
-#ifdef ENCODER_ENABLE
-#    include "encoder.h"
-#else
-#    define NUM_ENCODERS 0
-#endif
-
-#ifndef DYNAMIC_KEYMAP_EEPROM_MAX_ADDR
-#    define DYNAMIC_KEYMAP_EEPROM_MAX_ADDR (TOTAL_EEPROM_BYTE_COUNT - 1)
-#endif
-
-// If DYNAMIC_KEYMAP_EEPROM_ADDR not explicitly defined in config.h,
-#ifndef DYNAMIC_KEYMAP_EEPROM_ADDR
-#    define DYNAMIC_KEYMAP_EEPROM_ADDR DYNAMIC_KEYMAP_EEPROM_START
-#endif
-
-// Encoders are located right after the dynamic keymap
-#define VIAL_ENCODERS_EEPROM_ADDR (DYNAMIC_KEYMAP_EEPROM_ADDR + (DYNAMIC_KEYMAP_LAYER_COUNT * MATRIX_ROWS * MATRIX_COLS * 2))
-#define DYNAMIC_KEYMAP_ENCODER_EEPROM_ADDR VIAL_ENCODERS_EEPROM_ADDR
-
-#define VIAL_ENCODERS_SIZE (NUM_ENCODERS * DYNAMIC_KEYMAP_LAYER_COUNT * 2 * 2)
-
-// QMK settings area is just past encoders
-#define VIAL_QMK_SETTINGS_EEPROM_ADDR (VIAL_ENCODERS_EEPROM_ADDR + VIAL_ENCODERS_SIZE)
-
-#ifdef QMK_SETTINGS
-#include "qmk_settings.h"
-#define VIAL_QMK_SETTINGS_SIZE (sizeof(qmk_settings_t))
-#else
-#define VIAL_QMK_SETTINGS_SIZE 0
-#endif
-
-// Tap-dance
-#define VIAL_TAP_DANCE_EEPROM_ADDR (VIAL_QMK_SETTINGS_EEPROM_ADDR + VIAL_QMK_SETTINGS_SIZE)
-
-#ifdef VIAL_TAP_DANCE_ENABLE
-#define VIAL_TAP_DANCE_SIZE (sizeof(vial_tap_dance_entry_t) * VIAL_TAP_DANCE_ENTRIES)
-#else
-#define VIAL_TAP_DANCE_SIZE 0
-#endif
-
-// Combos
-#define VIAL_COMBO_EEPROM_ADDR (VIAL_TAP_DANCE_EEPROM_ADDR + VIAL_TAP_DANCE_SIZE)
-
-#ifdef VIAL_COMBO_ENABLE
-#define VIAL_COMBO_SIZE (sizeof(vial_combo_entry_t) * VIAL_COMBO_ENTRIES)
-#else
-#define VIAL_COMBO_SIZE 0
-#endif
-
-// Key overrides
-#define VIAL_KEY_OVERRIDE_EEPROM_ADDR (VIAL_COMBO_EEPROM_ADDR + VIAL_COMBO_SIZE)
-
-#ifdef VIAL_KEY_OVERRIDE_ENABLE
-#define VIAL_KEY_OVERRIDE_SIZE (sizeof(vial_key_override_entry_t) * VIAL_KEY_OVERRIDE_ENTRIES)
-#else
-#define VIAL_KEY_OVERRIDE_SIZE 0
-#endif
-
-// Dynamic macro
-#ifndef DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR
-#    define DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR (VIAL_KEY_OVERRIDE_EEPROM_ADDR + VIAL_KEY_OVERRIDE_SIZE)
-#endif
-
-// Dynamic macros are stored after the keymaps and use what is available
-// up to and including DYNAMIC_KEYMAP_EEPROM_MAX_ADDR.
-#ifndef DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE
-#    define DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE (DYNAMIC_KEYMAP_EEPROM_MAX_ADDR - DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR + 1)
-#endif
-
-#ifndef DYNAMIC_KEYMAP_MACRO_DELAY
-#    define DYNAMIC_KEYMAP_MACRO_DELAY TAP_CODE_DELAY
-#endif
-
-static uint16_t decode_keycode(uint16_t kc) {
-    /* map 0xFF01 => 0x0100; 0xFF02 => 0x0200, etc */
-    if (kc > 0xFF00)
-        return (kc & 0xFF) << 8;
-    return kc;
-}
-
-void dynamic_keymap_macro_send(uint8_t id) {
-    if (id >= DYNAMIC_KEYMAP_MACRO_COUNT) {
-        return;
-    }
-
-    // Check the last byte of the buffer.
-    // If it's not zero, then we are in the middle
-    // of buffer writing, possibly an aborted buffer
-    // write. So do nothing.
-    void *p = (void *)(DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR + DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE - 1);
-    if (eeprom_read_byte(p) != 0) {
-        return;
-    }
-
-    // Skip N null characters
-    // p will then point to the Nth macro
-    p         = (void *)(DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR);
-    void *end = (void *)(DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR + DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE);
-    while (id > 0) {
-        // If we are past the end of the buffer, then the buffer
-        // contents are garbage, i.e. there were not DYNAMIC_KEYMAP_MACRO_COUNT
-        // nulls in the buffer.
-        if (p == end) {
-            return;
-        }
-        if (eeprom_read_byte(p) == 0) {
-            --id;
-        }
-        ++p;
-    }
-
-    // Send the macro string one or three chars at a time
-    // by making temporary 1 or 3 char strings
-    char data[4] = {0, 0, 0, 0};
-    // We already checked there was a null at the end of
-    // the buffer, so this cannot go past the end
-    while (1) {
-        // Clear every pass: an extended tap leaves data[2..3] set, and the
-        // next 1- or 3-char send_string() would then run off the end.
-        memset(data, 0, sizeof(data));
-        data[0] = eeprom_read_byte(p++);
-        // Stop at the null terminator of this macro string
-        if (data[0] == 0) {
-            break;
-        }
-        if (data[0] == SS_QMK_PREFIX) {
-            // If the char is magic, process it as indicated by the next character
-            // (tap, down, up, delay)
-            data[1] = eeprom_read_byte(p++);
-            if (data[1] == 0)
-                break;
-            if (data[1] == SS_TAP_CODE || data[1] == SS_DOWN_CODE || data[1] == SS_UP_CODE) {
-                // For tap, down, up, just stuff it into the array and send_string it
-                data[2] = eeprom_read_byte(p++);
-                if (data[2] != 0)
-                    send_string(data);
-            } else if (data[1] == VIAL_MACRO_EXT_TAP || data[1] == VIAL_MACRO_EXT_DOWN || data[1] == VIAL_MACRO_EXT_UP) {
-                data[2] = eeprom_read_byte(p++);
-                if (data[2] != 0) {
-                    data[3] = eeprom_read_byte(p++);
-                    if (data[3] != 0) {
-                        uint16_t kc;
-                        memcpy(&kc, &data[2], sizeof(kc));
-                        kc = decode_keycode(kc);
-                        switch (data[1]) {
-                        case VIAL_MACRO_EXT_TAP:
-                            vial_keycode_tap(kc);
-                            break;
-                        case VIAL_MACRO_EXT_DOWN:
-                            vial_keycode_down(kc);
-                            break;
-                        case VIAL_MACRO_EXT_UP:
-                            vial_keycode_up(kc);
-                            break;
-                        }
-                    }
-                }
-            } else if (data[1] == SS_DELAY_CODE) {
-                // Check delay code type is VIA(0xC) or not: VIA stores 1-5
-                // ASCII digits and a '|'. Only a found '|' makes it VIA, so
-                // five digits without one fall back to the Vial encoding.
-                bool is_via = false;
-                int  ms     = 0;
-                for (int idx = 0; idx <= 5; idx++) {
-                    uint8_t c = eeprom_read_byte(p + idx);
-                    if (idx < 5 && c >= '0' && c <= '9') {
-                        ms = ms * 10 + c - '0';
-                    } else {
-                        if (c == '|' && idx != 0) {
-                            is_via = true;
-                            p += idx + 1;
-                        }
-                        break;
-                    }
-                }
-
-                if (!is_via) {
-                    // For delay, decode the delay and wait_ms for that amount
-                    uint8_t d0 = eeprom_read_byte(p++);
-                    uint8_t d1 = eeprom_read_byte(p++);
-                    if (d0 == 0 || d1 == 0) break;
-                    // we cannot use 0 for these, need to subtract 1 and use 255 instead of 256 for delay calculation
-                    ms = (d0 - 1) + (d1 - 1) * 255;
-                }
-
-                while (ms--) wait_ms(1);
-            }
-        } else {
-            // If the char wasn't magic, just send it
-            send_string_with_delay(data, DYNAMIC_KEYMAP_MACRO_DELAY);
-        }
-    }
 }

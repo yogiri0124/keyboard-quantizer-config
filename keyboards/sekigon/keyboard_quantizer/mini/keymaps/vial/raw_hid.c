@@ -3,7 +3,7 @@
 #include "raw_hid.h"
 #include "via.h"
 #include "vial.h"
-#include "quantizer_mouse.h"
+#include "settings.h"
 
 extern void raw_hid_receive_vial(uint8_t *data, uint8_t length);
 extern void raw_hid_receive_qmk(uint8_t *data, uint8_t length);
