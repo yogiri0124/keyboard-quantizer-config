@@ -10,6 +10,7 @@
 
 #include "action.h"
 #include "keycodes.h"
+#include "report.h"
 
 #define TAP_CODE_DELAY 0
 #define DYNAMIC_KEYMAP_MACRO_COUNT 16
@@ -20,5 +21,22 @@ void wait_ms(uint32_t ms);
 
 /* quantum/action_util.h */
 typedef enum { ONESHOT_PRESSED = 1, ONESHOT_OTHER_KEY_PRESSED = 2 } oneshot_fullfillment_t;
-void clear_oneshot_layer_state(oneshot_fullfillment_t state);
-void clear_oneshot_mods(void);
+void    clear_oneshot_layer_state(oneshot_fullfillment_t state);
+void    clear_oneshot_mods(void);
+uint8_t get_mods(void);
+uint8_t get_weak_mods(void);
+uint8_t get_oneshot_mods(void);
+
+/* quantum/action_layer.h, keymap_common.h */
+typedef uint32_t     layer_state_t;
+extern layer_state_t layer_state;
+extern layer_state_t default_layer_state;
+uint8_t              get_highest_layer(layer_state_t state);
+uint8_t              layer_switch_get_layer(keypos_t key);
+uint16_t             keymap_key_to_keycode(uint8_t layer, keypos_t key);
+
+/* quantum/action.h, timer.h, host.h */
+void     action_exec(keyevent_t event);
+uint16_t timer_read(void);
+uint16_t timer_elapsed(uint16_t last);
+void     host_mouse_send(report_mouse_t *report);
