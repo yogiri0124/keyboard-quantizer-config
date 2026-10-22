@@ -30,4 +30,7 @@ run input "$root/tools/test/test_input.c" "$kq/mini/hid_input.c" "$kq/mini/hid_q
 
 run mouse_core -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 "$root/tools/test/test_mouse_core.c" "$vial/modes.c" "$vial/pointer.c" "$vial/gesture.c" "$vial/scroll_out.c"
 
+run macro -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' "$root/tools/test/test_macro.c" "$vial/macro.c"
+
 ${PYTHON:-python3} -B "$root/tools/test/test_hid_descriptors.py"
+${PYTHON:-python3} -B "$root/tools/test/test_vil_to_c.py"

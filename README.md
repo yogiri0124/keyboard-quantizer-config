@@ -202,14 +202,15 @@ Lenovo ThinkPad キーボードは横スクロールをベンダーのレポー�
 ### テスト
 
 `tools/test/run.sh` が、QMK に依存しない部分（記述子とレポートの読み解き、キュー、
-入力から行列、モード、カーソル、ジェスチャー、スクロール出力）をパソコン向けに
-コンパイルして確かめる。Actions はビルドの前に実行する。手元では
+入力から行列、モード、カーソル、ジェスチャー、スクロール出力、マクロの再生）を
+パソコン向けにコンパイルして確かめ、Python の道具（記述子の検証、`default.vil` の変換）も
+確かめる。Actions はビルドの前に実行する。手元では
 
 ```sh
 sh tools/test/run.sh
 ```
 
-（`cc` が無ければ `CC=gcc` を付ける。）
+（`cc` や `python3` が無ければ `CC=gcc`、`PYTHON=python` などを付ける。）
 
 ### 本家の更新を取り込む
 
@@ -227,6 +228,6 @@ rm -rf keyboards/sekigon/keyboard_quantizer/parser keyboards/sekigon/keyboard_qu
 cp -a /path/to/keyboard-quantizer-config/keyboards /path/to/keyboard-quantizer-config/util .
 for p in /path/to/keyboard-quantizer-config/patches/*.patch; do git apply "$p"; done
 vial=keyboards/sekigon/keyboard_quantizer/mini/keymaps/vial
-python3 /path/to/keyboard-quantizer-config/tools/vil_to_c.py $vial/default.vil quantum/vial_ensure_keycode.h > $vial/default_config.h
+python3 /path/to/keyboard-quantizer-config/tools/vil_to_c.py $vial/default.vil quantum/vial_ensure_keycode.h > $vial/default_vil.h
 make sekigon/keyboard_quantizer/mini:vial
 ```

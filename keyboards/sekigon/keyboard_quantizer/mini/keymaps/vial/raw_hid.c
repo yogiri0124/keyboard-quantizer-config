@@ -12,7 +12,7 @@
 #include "via.h"
 #include "vial.h"
 #include "settings.h"
-#include "default_config_write.h"
+#include "default_config.h"
 
 extern void raw_hid_receive_vial(uint8_t *data, uint8_t length);
 extern void raw_hid_receive_qmk(uint8_t *data, uint8_t length);

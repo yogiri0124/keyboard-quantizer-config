@@ -21,7 +21,7 @@
 #include "keymap_introspection.h"
 
 #include "cli.h"
-#include "default_config_write.h"
+#include "default_config.h"
 #include "identity.h"
 #include "mouse.h"
 #include "mouse_keys.h"
@@ -31,7 +31,7 @@
 /* The default keymap (keymaps[]): default.vil, the layout as Vial saves it,
  * built in (see default_config.c). */
 #define KQ_DEFAULT_KEYMAP
-#include "default_config.h"
+#include "default_vil.h"
 
 /* QMK's keycode lookup (quantum/keymap_common.c), with one addition: layer
  * 0's gesture cells are layer 1's. Gestures tap their cell like a key

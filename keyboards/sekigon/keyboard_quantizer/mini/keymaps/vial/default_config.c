@@ -3,7 +3,7 @@
 
 /* The default configuration: default.vil, the layout Vial saves, built in.
  *
- * default_config.h is generated from default.vil at build time
+ * default_vil.h is generated from default.vil at build time
  * (tools/vil_to_c.py, run by CI). It holds QMK's keymaps[] (the default
  * layers) and the tap dances, combos, key overrides, macros and QMK
  * Settings, which are written here after every reset of the saved
@@ -19,8 +19,9 @@
 #include "dynamic_keymap.h"
 #include "qmk_settings.h"
 
-#define KQ_DEFAULT_DATA
 #include "default_config.h"
+#define KQ_DEFAULT_DATA
+#include "default_vil.h"
 
 _Static_assert(KQ_DEFAULT_TAP_DANCE_COUNT <= VIAL_TAP_DANCE_ENTRIES, "default.vil has too many tap dances");
 _Static_assert(KQ_DEFAULT_COMBO_COUNT <= VIAL_COMBO_ENTRIES, "default.vil has too many combos");

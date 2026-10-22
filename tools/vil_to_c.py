@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Turn a Vial layout file (.vil) into the firmware's default configuration.
 
-    vil_to_c.py default.vil quantum/vial_ensure_keycode.h > default_config.h
+    vil_to_c.py default.vil quantum/vial_ensure_keycode.h > default_vil.h
 
 The header holds two parts: with KQ_DEFAULT_KEYMAP defined, the default
 keymap (QMK's keymaps[], which QMK wants in keymap.c); with KQ_DEFAULT_DATA,
