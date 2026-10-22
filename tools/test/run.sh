@@ -36,6 +36,8 @@ run mouse_keys -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DVIAL
 
 run settings_locks -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DMOUSEKEY_ENABLE -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 "$root/tools/test/test_settings_locks.c" "$vial/settings.c" "$vial/locks.c" "$vial/mouse.c" "$vial/modes.c" "$vial/scroll_out.c"
 
+run host -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' "$root/tools/test/test_host.c" "$kq/mini/hid_host.c" "$kq/mini/hid_queue.c" "$kq/mini/hid_scan.c"
+
 run ball_wheel -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DMOUSEKEY_ENABLE -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 "$root/tools/test/test_ball_wheel.c" "$vial/ball.c" "$vial/wheel.c" "$vial/gesture.c" "$vial/pointer.c" "$vial/scroll_out.c" "$vial/modes.c"
 
 ${PYTHON:-python3} -B "$root/tools/test/test_hid_descriptors.py"

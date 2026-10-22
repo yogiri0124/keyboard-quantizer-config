@@ -4,4 +4,3 @@
 #include <stdint.h>
 
 #define QS_tap_code_delay 0
-#define qs_wait_ms wait_ms

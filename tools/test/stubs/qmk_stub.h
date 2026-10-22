@@ -54,3 +54,11 @@ void     action_exec(keyevent_t event);
 uint16_t timer_read(void);
 uint16_t timer_elapsed(uint16_t last);
 void     host_mouse_send(report_mouse_t *report);
+
+/* platforms/gpio.h, quantum/led.h, quantum/matrix.h */
+typedef uint32_t pin_t;
+void             gpio_set_pin_output_push_pull(pin_t pin);
+void             gpio_write_pin_high(pin_t pin);
+void             gpio_write_pin_low(pin_t pin);
+uint8_t          host_keyboard_leds(void);
+void             matrix_init_user(void);

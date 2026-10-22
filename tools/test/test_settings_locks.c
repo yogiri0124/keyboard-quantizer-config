@@ -1,5 +1,6 @@
-/* Host tests for settings.c, locks.c and the report sender in mouse.c
- * (with the real modes.c and scroll_out.c), against QMK stand-ins. */
+/* Host tests for settings.c, locks.c, and the report sender and injected
+ * taps in mouse.c (with the real modes.c and scroll_out.c), against QMK
+ * stand-ins. */
 
 #include <string.h>
 

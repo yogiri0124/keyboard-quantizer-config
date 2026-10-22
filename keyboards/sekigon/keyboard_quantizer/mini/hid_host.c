@@ -83,6 +83,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
         kbd_report_id = scan.led_report_id;
         led_known     = false;
         led_busy      = false;
+        sync_lock_leds();
     }
     tuh_hid_receive_report(dev_addr, instance);
 }

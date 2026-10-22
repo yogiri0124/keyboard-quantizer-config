@@ -56,7 +56,7 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
         raw_hid_receive_qmk(data, length);
     }
     /* A keymap reset (Vial / VIA) empties tap dances, combos, key overrides
-     * and QMK Settings too: put default.vil's back. */
+     * and QMK Settings too: put default.vil's back, its macros included. */
     if (command == id_dynamic_keymap_reset) {
         default_config_write();
     }
