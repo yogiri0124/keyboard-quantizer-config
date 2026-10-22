@@ -1,216 +1,154 @@
 // Copyright 2023 sekigon-gonnoc
+// Copyright 2026 yogiri0124
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-/* Dynamic keymap macros, replacing quantum/dynamic_keymap.c's (renamed in
- * rules.mk): also plays Vial's extended keycodes and accepts both the VIA and
- * the Vial encoding of delays. */
+/* Dynamic keymap macros, replacing quantum/dynamic_keymap.c's player (renamed
+ * in rules.mk) so that a delay saved by VIA plays too: Vial stores a delay as
+ * two bytes, VIA as 1-5 ASCII digits and a '|'. Otherwise it plays what
+ * QMK's does: text, taps / presses / releases, Vial's 16-bit keycodes.
+ *
+ * The macro buffer is read through QMK's own accessors, so its place in the
+ * EEPROM stays QMK's business. */
 
 #include QMK_KEYBOARD_H
-
-#include <string.h>
 
 #include "vial.h"
 #include "dynamic_keymap.h"
 #include "send_string.h"
 
-#ifdef VIA_ENABLE
-#    include "via.h"
-#    define DYNAMIC_KEYMAP_EEPROM_START (VIA_EEPROM_CONFIG_END)
-#else
-#    include "eeconfig.h"
-#    define DYNAMIC_KEYMAP_EEPROM_START (EECONFIG_SIZE)
-#endif
-
-#ifdef ENCODER_ENABLE
-#    include "encoder.h"
-#else
-#    define NUM_ENCODERS 0
-#endif
-
-#ifndef DYNAMIC_KEYMAP_EEPROM_MAX_ADDR
-#    define DYNAMIC_KEYMAP_EEPROM_MAX_ADDR (TOTAL_EEPROM_BYTE_COUNT - 1)
-#endif
-
-// If DYNAMIC_KEYMAP_EEPROM_ADDR not explicitly defined in config.h,
-#ifndef DYNAMIC_KEYMAP_EEPROM_ADDR
-#    define DYNAMIC_KEYMAP_EEPROM_ADDR DYNAMIC_KEYMAP_EEPROM_START
-#endif
-
-// Encoders are located right after the dynamic keymap
-#define VIAL_ENCODERS_EEPROM_ADDR (DYNAMIC_KEYMAP_EEPROM_ADDR + (DYNAMIC_KEYMAP_LAYER_COUNT * MATRIX_ROWS * MATRIX_COLS * 2))
-#define DYNAMIC_KEYMAP_ENCODER_EEPROM_ADDR VIAL_ENCODERS_EEPROM_ADDR
-
-#define VIAL_ENCODERS_SIZE (NUM_ENCODERS * DYNAMIC_KEYMAP_LAYER_COUNT * 2 * 2)
-
-// QMK settings area is just past encoders
-#define VIAL_QMK_SETTINGS_EEPROM_ADDR (VIAL_ENCODERS_EEPROM_ADDR + VIAL_ENCODERS_SIZE)
-
-#ifdef QMK_SETTINGS
-#include "qmk_settings.h"
-#define VIAL_QMK_SETTINGS_SIZE (sizeof(qmk_settings_t))
-#else
-#define VIAL_QMK_SETTINGS_SIZE 0
-#endif
-
-// Tap-dance
-#define VIAL_TAP_DANCE_EEPROM_ADDR (VIAL_QMK_SETTINGS_EEPROM_ADDR + VIAL_QMK_SETTINGS_SIZE)
-
-#ifdef VIAL_TAP_DANCE_ENABLE
-#define VIAL_TAP_DANCE_SIZE (sizeof(vial_tap_dance_entry_t) * VIAL_TAP_DANCE_ENTRIES)
-#else
-#define VIAL_TAP_DANCE_SIZE 0
-#endif
-
-// Combos
-#define VIAL_COMBO_EEPROM_ADDR (VIAL_TAP_DANCE_EEPROM_ADDR + VIAL_TAP_DANCE_SIZE)
-
-#ifdef VIAL_COMBO_ENABLE
-#define VIAL_COMBO_SIZE (sizeof(vial_combo_entry_t) * VIAL_COMBO_ENTRIES)
-#else
-#define VIAL_COMBO_SIZE 0
-#endif
-
-// Key overrides
-#define VIAL_KEY_OVERRIDE_EEPROM_ADDR (VIAL_COMBO_EEPROM_ADDR + VIAL_COMBO_SIZE)
-
-#ifdef VIAL_KEY_OVERRIDE_ENABLE
-#define VIAL_KEY_OVERRIDE_SIZE (sizeof(vial_key_override_entry_t) * VIAL_KEY_OVERRIDE_ENTRIES)
-#else
-#define VIAL_KEY_OVERRIDE_SIZE 0
-#endif
-
-// Dynamic macro
-#ifndef DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR
-#    define DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR (VIAL_KEY_OVERRIDE_EEPROM_ADDR + VIAL_KEY_OVERRIDE_SIZE)
-#endif
-
-// Dynamic macros are stored after the keymaps and use what is available
-// up to and including DYNAMIC_KEYMAP_EEPROM_MAX_ADDR.
-#ifndef DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE
-#    define DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE (DYNAMIC_KEYMAP_EEPROM_MAX_ADDR - DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR + 1)
-#endif
-
 #ifndef DYNAMIC_KEYMAP_MACRO_DELAY
 #    define DYNAMIC_KEYMAP_MACRO_DELAY TAP_CODE_DELAY
 #endif
 
-static uint16_t decode_keycode(uint16_t kc) {
-    /* map 0xFF01 => 0x0100; 0xFF02 => 0x0200, etc */
-    if (kc > 0xFF00)
-        return (kc & 0xFF) << 8;
-    return kc;
+#define VIA_DELAY_DIGITS 5
+
+typedef struct {
+    uint16_t pos;
+    uint16_t size;
+} reader_t;
+
+/* The next byte, 0 past the end (which also ends a macro). */
+static uint8_t next(reader_t *r) {
+    uint8_t b = 0;
+    if (r->pos < r->size) {
+        dynamic_keymap_macro_get_buffer(r->pos, 1, &b);
+    }
+    r->pos++;
+    return b;
+}
+
+static uint8_t peek(const reader_t *r, uint16_t ahead) {
+    uint8_t b = 0;
+    if (r->pos + ahead < r->size) {
+        dynamic_keymap_macro_get_buffer((uint16_t)(r->pos + ahead), 1, &b);
+    }
+    return b;
+}
+
+/* Vial: 16-bit keycodes travel without zero bytes, 0xXX00 as 0xFFXX. */
+static uint16_t decode_keycode(uint8_t lo, uint8_t hi) {
+    uint16_t kc = (uint16_t)(lo | (hi << 8));
+    return kc > 0xFF00 ? (uint16_t)((kc & 0xFF) << 8) : kc;
+}
+
+/* A delay, in either encoding. False if the macro ends inside it. */
+static bool read_delay(reader_t *r, uint32_t *ms) {
+    uint32_t value = 0;
+    for (uint16_t i = 0; i <= VIA_DELAY_DIGITS; i++) {
+        uint8_t c = peek(r, i);
+        if (i < VIA_DELAY_DIGITS && c >= '0' && c <= '9') {
+            value = value * 10 + (uint32_t)(c - '0');
+            continue;
+        }
+        /* Only a '|' after at least one digit makes it VIA's. */
+        if (c == '|' && i != 0) {
+            r->pos = (uint16_t)(r->pos + i + 1);
+            *ms    = value;
+            return true;
+        }
+        break;
+    }
+    uint8_t d0 = next(r), d1 = next(r);
+    if (d0 == 0 || d1 == 0) {
+        return false;
+    }
+    /* Neither byte may be 0: each counts from 1, base 255. */
+    *ms = (uint32_t)(d0 - 1) + (uint32_t)(d1 - 1) * 255;
+    return true;
 }
 
 void dynamic_keymap_macro_send(uint8_t id) {
-    if (id >= DYNAMIC_KEYMAP_MACRO_COUNT) {
+    reader_t r = {0, dynamic_keymap_macro_get_buffer_size()};
+    if (id >= DYNAMIC_KEYMAP_MACRO_COUNT || r.size == 0) {
         return;
     }
-
-    // Check the last byte of the buffer.
-    // If it's not zero, then we are in the middle
-    // of buffer writing, possibly an aborted buffer
-    // write. So do nothing.
-    void *p = (void *)(DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR + DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE - 1);
-    if (eeprom_read_byte(p) != 0) {
+    /* A buffer that does not end in 0 is half written: play nothing. */
+    r.pos = (uint16_t)(r.size - 1);
+    if (next(&r) != 0) {
         return;
     }
-
-    // Skip N null characters
-    // p will then point to the Nth macro
-    p         = (void *)(DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR);
-    void *end = (void *)(DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR + DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE);
+    /* Macro id starts after id zero bytes. */
+    r.pos = 0;
     while (id > 0) {
-        // If we are past the end of the buffer, then the buffer
-        // contents are garbage, i.e. there were not DYNAMIC_KEYMAP_MACRO_COUNT
-        // nulls in the buffer.
-        if (p == end) {
+        if (r.pos >= r.size) {
             return;
         }
-        if (eeprom_read_byte(p) == 0) {
-            --id;
+        if (next(&r) == 0) {
+            id--;
         }
-        ++p;
     }
 
-    // Send the macro string one or three chars at a time
-    // by making temporary 1 or 3 char strings
-    char data[4] = {0, 0, 0, 0};
-    // We already checked there was a null at the end of
-    // the buffer, so this cannot go past the end
-    while (1) {
-        // Clear every pass: an extended tap leaves data[2..3] set, and the
-        // next 1- or 3-char send_string() would then run off the end.
-        memset(data, 0, sizeof(data));
-        data[0] = eeprom_read_byte(p++);
-        // Stop at the null terminator of this macro string
+    for (;;) {
+        char data[4] = {0, 0, 0, 0};
+        data[0]      = (char)next(&r);
         if (data[0] == 0) {
-            break;
+            return;
         }
-        if (data[0] == SS_QMK_PREFIX) {
-            // If the char is magic, process it as indicated by the next character
-            // (tap, down, up, delay)
-            data[1] = eeprom_read_byte(p++);
-            if (data[1] == 0)
-                break;
-            if (data[1] == SS_TAP_CODE || data[1] == SS_DOWN_CODE || data[1] == SS_UP_CODE) {
-                // For tap, down, up, just stuff it into the array and send_string it
-                data[2] = eeprom_read_byte(p++);
-                if (data[2] != 0)
-                    send_string(data);
-            } else if (data[1] == VIAL_MACRO_EXT_TAP || data[1] == VIAL_MACRO_EXT_DOWN || data[1] == VIAL_MACRO_EXT_UP) {
-                data[2] = eeprom_read_byte(p++);
-                if (data[2] != 0) {
-                    data[3] = eeprom_read_byte(p++);
-                    if (data[3] != 0) {
-                        uint16_t kc;
-                        memcpy(&kc, &data[2], sizeof(kc));
-                        kc = decode_keycode(kc);
-                        switch (data[1]) {
-                        case VIAL_MACRO_EXT_TAP:
-                            vial_keycode_tap(kc);
-                            break;
-                        case VIAL_MACRO_EXT_DOWN:
-                            vial_keycode_down(kc);
-                            break;
-                        case VIAL_MACRO_EXT_UP:
-                            vial_keycode_up(kc);
-                            break;
-                        }
-                    }
-                }
-            } else if (data[1] == SS_DELAY_CODE) {
-                // Check delay code type is VIA(0xC) or not: VIA stores 1-5
-                // ASCII digits and a '|'. Only a found '|' makes it VIA, so
-                // five digits without one fall back to the Vial encoding.
-                bool is_via = false;
-                int  ms     = 0;
-                for (int idx = 0; idx <= 5; idx++) {
-                    uint8_t c = eeprom_read_byte(p + idx);
-                    if (idx < 5 && c >= '0' && c <= '9') {
-                        ms = ms * 10 + c - '0';
-                    } else {
-                        if (c == '|' && idx != 0) {
-                            is_via = true;
-                            p += idx + 1;
-                        }
-                        break;
-                    }
-                }
-
-                if (!is_via) {
-                    // For delay, decode the delay and wait_ms for that amount
-                    uint8_t d0 = eeprom_read_byte(p++);
-                    uint8_t d1 = eeprom_read_byte(p++);
-                    if (d0 == 0 || d1 == 0) break;
-                    // we cannot use 0 for these, need to subtract 1 and use 255 instead of 256 for delay calculation
-                    ms = (d0 - 1) + (d1 - 1) * 255;
-                }
-
-                while (ms--) wait_ms(1);
-            }
-        } else {
-            // If the char wasn't magic, just send it
+        if (data[0] != SS_QMK_PREFIX) {
             send_string_with_delay(data, DYNAMIC_KEYMAP_MACRO_DELAY);
+            continue;
+        }
+        uint8_t code = next(&r);
+        switch (code) {
+            case SS_TAP_CODE:
+            case SS_DOWN_CODE:
+            case SS_UP_CODE:
+                data[1] = (char)code;
+                data[2] = (char)next(&r);
+                if (data[2] == 0) {
+                    return;
+                }
+                send_string(data);
+                break;
+            case VIAL_MACRO_EXT_TAP:
+            case VIAL_MACRO_EXT_DOWN:
+            case VIAL_MACRO_EXT_UP: {
+                uint8_t lo = next(&r), hi = 0;
+                if (lo == 0 || (hi = next(&r)) == 0) {
+                    return;
+                }
+                uint16_t kc = decode_keycode(lo, hi);
+                if (code == VIAL_MACRO_EXT_TAP) {
+                    vial_keycode_tap(kc);
+                } else if (code == VIAL_MACRO_EXT_DOWN) {
+                    vial_keycode_down(kc);
+                } else {
+                    vial_keycode_up(kc);
+                }
+                break;
+            }
+            case SS_DELAY_CODE: {
+                uint32_t ms;
+                if (!read_delay(&r, &ms)) {
+                    return;
+                }
+                while (ms--) {
+                    wait_ms(1);
+                }
+                break;
+            }
+            default: /* 0 ends the macro; anything else is unknown */
+                return;
         }
     }
 }
