@@ -32,5 +32,7 @@ run mouse_core -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 "$root/tools/test/test_mo
 
 run macro -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' "$root/tools/test/test_macro.c" "$vial/macro.c"
 
+run mouse_keys -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DVIAL_ENABLE -DTAP_DANCE_ENABLE "$root/tools/test/test_mouse_keys.c" "$vial/mouse_keys.c" "$vial/modes.c"
+
 ${PYTHON:-python3} -B "$root/tools/test/test_hid_descriptors.py"
 ${PYTHON:-python3} -B "$root/tools/test/test_vil_to_c.py"
