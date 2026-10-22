@@ -13,18 +13,21 @@
 
 #include "tusb.h"
 #include "hid_queue.h"
+#include "hid_scan.h"
 
 #define KQ_PIN_LED 7
 #define LED_BLINK_MS 50
 
 /* Core1. */
-static uint8_t kbd_addr; /* the keyboard interface that shows lock LEDs, 0: none */
+static uint8_t kbd_addr; /* the interface that shows lock LEDs, 0: none */
 static uint8_t kbd_instance;
+static uint8_t kbd_report_id; /* of its LED output report, 0: none */
 static uint8_t led_sent;
 static bool    led_known; /* led_sent reached the current keyboard */
 /* The output report goes out asynchronously and TinyUSB keeps a pointer to
- * it until done: it lives here and is not touched while led_busy. */
-static uint8_t       led_report;
+ * it until done: it lives here and is not touched while led_busy. With a
+ * Report ID, that is its first byte. */
+static uint8_t       led_report[2];
 static volatile bool led_busy;
 
 /* Core0 -> core1. */
@@ -48,9 +51,13 @@ static void sync_lock_leds(void) {
     if (kbd_addr == 0 || led_busy || (led_known && wanted == led_sent)) {
         return;
     }
-    led_report = wanted;
-    led_busy   = true;
-    if (tuh_hid_set_report(kbd_addr, kbd_instance, 0, HID_REPORT_TYPE_OUTPUT, &led_report, sizeof(led_report))) {
+    uint8_t n = 0;
+    if (kbd_report_id != 0) {
+        led_report[n++] = kbd_report_id;
+    }
+    led_report[n++] = wanted;
+    led_busy        = true;
+    if (tuh_hid_set_report(kbd_addr, kbd_instance, kbd_report_id, HID_REPORT_TYPE_OUTPUT, led_report, n)) {
         led_sent  = wanted;
         led_known = true;
     } else {
@@ -59,29 +66,34 @@ static void sync_lock_leds(void) {
 }
 
 void tuh_mount_cb(uint8_t dev_addr) {
+    (void)dev_addr;
     activity = true;
-    for (uint8_t instance = 0; instance < tuh_hid_instance_count(dev_addr); instance++) {
-        if (tuh_hid_interface_protocol(dev_addr, instance) == HID_ITF_PROTOCOL_KEYBOARD) {
-            kbd_addr     = dev_addr;
-            kbd_instance = instance;
-            led_known    = false; /* a new keyboard: tell it the current state */
-            led_busy     = false;
-        }
-    }
     sync_lock_leds();
 }
 
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_report, uint16_t desc_len) {
     hidq_push_mount(interface_id(dev_addr, instance), desc_report, desc_len);
+    /* The lock LEDs go to the interface that has them, the newest one when
+     * several do; tell it the current state. */
+    hid_scan_t scan;
+    hid_scan(desc_report, desc_len, &scan);
+    if (scan.has_led_output) {
+        kbd_addr      = dev_addr;
+        kbd_instance  = instance;
+        kbd_report_id = scan.led_report_id;
+        led_known     = false;
+        led_busy      = false;
+    }
     tuh_hid_receive_report(dev_addr, instance);
 }
 
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
     hidq_push_unmount(interface_id(dev_addr, instance));
     if (dev_addr == kbd_addr && instance == kbd_instance) {
-        kbd_addr     = 0;
-        kbd_instance = 0;
-        led_busy     = false; /* its transfer will not complete */
+        kbd_addr      = 0;
+        kbd_instance  = 0;
+        kbd_report_id = 0;
+        led_busy      = false; /* its transfer will not complete */
     }
 }
 

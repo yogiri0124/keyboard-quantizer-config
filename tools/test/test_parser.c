@@ -5,6 +5,7 @@
 #include "check.h"
 #include "hid_desc.h"
 #include "hid_report.h"
+#include "hid_scan.h"
 
 static void load(uint8_t interface, const uint8_t *d, size_t n) {
     hid_desc_clear();
@@ -257,7 +258,26 @@ static void test_robustness(void) {
     }
 }
 
+/* The quick core1 look: Report IDs, and where the lock LEDs are. */
+static void test_scan(void) {
+    hid_scan_t s;
+    hid_scan(boot_keyboard, sizeof boot_keyboard, &s);
+    CHECK(!s.uses_report_ids && !s.has_led_output, "boot keyboard without LEDs");
+    /* A keyboard in report 3 with its LED output, then a Push'ed report 9. */
+    static const uint8_t kb[] = {0x05, 0x01, 0x09, 0x06, 0xA1, 0x01, 0x85, 0x03, 0x05, 0x07, 0x19, 0xE0, 0x29, 0xE7,
+                                 0x15, 0x00, 0x25, 0x01, 0x75, 0x01, 0x95, 0x08, 0x81, 0x02, 0xA4, 0x85, 0x09, 0x05,
+                                 0x0C, 0xB4, 0x05, 0x08, 0x19, 0x01, 0x29, 0x05, 0x95, 0x05, 0x91, 0x02, 0x95, 0x03,
+                                 0x91, 0x01, 0xC0};
+    hid_scan(kb, sizeof kb, &s);
+    CHECK(s.uses_report_ids && s.has_led_output && s.led_report_id == 3, "LED report id %u", s.led_report_id);
+    hid_scan(huge_mouse, sizeof huge_mouse, &s);
+    CHECK(s.uses_report_ids && !s.has_led_output, "HUGE PLUS mouse");
+    hid_scan(NULL, 10, &s);
+    CHECK(!s.uses_report_ids && !s.has_led_output, "NULL descriptor");
+}
+
 int main(void) {
+    test_scan();
     test_huge_plus();
     test_boot_keyboard();
     test_unsigned_logical_max();

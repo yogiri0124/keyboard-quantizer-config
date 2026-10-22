@@ -22,11 +22,11 @@ run() {
     "$out/$name"
 }
 
-run parser "$root/tools/test/test_parser.c" "$kq/parser/hid_desc.c" "$kq/parser/hid_report.c"
+run parser "$root/tools/test/test_parser.c" "$kq/parser/hid_desc.c" "$kq/parser/hid_report.c" "$kq/mini/hid_scan.c"
 
-run queue "$root/tools/test/test_queue.c" "$kq/mini/hid_queue.c"
+run queue "$root/tools/test/test_queue.c" "$kq/mini/hid_queue.c" "$kq/mini/hid_scan.c"
 
-run input "$root/tools/test/test_input.c" "$kq/mini/hid_input.c" "$kq/mini/hid_queue.c" "$kq/parser/hid_desc.c" "$kq/parser/hid_report.c"
+run input "$root/tools/test/test_input.c" "$kq/mini/hid_input.c" "$kq/mini/hid_queue.c" "$kq/mini/hid_scan.c" "$kq/parser/hid_desc.c" "$kq/parser/hid_report.c"
 
 run mouse_core -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 "$root/tools/test/test_mouse_core.c" "$vial/modes.c" "$vial/pointer.c" "$vial/gesture.c" "$vial/scroll_out.c"
 

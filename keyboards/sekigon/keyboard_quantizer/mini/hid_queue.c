@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "hid_queue.h"
+#include "hid_scan.h"
 
 #include <string.h>
 
@@ -78,28 +79,6 @@ static bool push_record(uint8_t type, uint8_t interface, const uint8_t *data, ui
     hidq_barrier();
     ring_tail = tail + pad + size;
     return true;
-}
-
-/* Whether a descriptor declares Report IDs (then the first byte of every
- * report names it). */
-static bool declares_report_ids(const uint8_t *desc, uint16_t len) {
-    uint16_t pos = 0;
-    while (desc != NULL && pos < len) {
-        uint8_t prefix = desc[pos];
-        if (prefix == 0xFE) { /* long item */
-            if (pos + 1 >= len) {
-                break;
-            }
-            pos = (uint16_t)(pos + 3 + desc[pos + 1]);
-            continue;
-        }
-        if ((prefix & 0xFC) == 0x84) {
-            return true;
-        }
-        uint8_t bytes = (uint8_t)(prefix & 0x03);
-        pos           = (uint16_t)(pos + 1 + (bytes == 3 ? 4 : bytes));
-    }
-    return false;
 }
 
 static bool interface_uses_ids(uint8_t interface) {
@@ -189,7 +168,9 @@ void hidq_push_mount(uint8_t interface, const uint8_t *desc, uint16_t len) {
     if (len > HIDQ_DESC_MAX) {
         len = HIDQ_DESC_MAX;
     }
-    set_uses_ids(interface, declares_report_ids(desc, len));
+    hid_scan_t scan;
+    hid_scan(desc, len, &scan);
+    set_uses_ids(interface, scan.uses_report_ids);
     push_event(HIDQ_MOUNT, interface, desc, len);
 }
 

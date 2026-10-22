@@ -6,7 +6,7 @@ COMBO_ENABLE = yes
 QMK_SETTINGS = yes
 
 # Board side (mini/): USB host queue, input -> matrix, TinyUSB callbacks.
-SRC += hid_queue.c hid_input.c hid_host.c
+SRC += hid_queue.c hid_scan.c hid_input.c hid_host.c
 
 # Keymap side.
 SRC += mouse.c ball.c mouse_keys.c modes.c locks.c pointer.c gesture.c wheel.c scroll_out.c

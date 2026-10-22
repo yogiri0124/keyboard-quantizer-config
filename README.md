@@ -17,6 +17,7 @@ Keyboard Quantizer mini（sekigon-gonnoc 作、以下 Quantizer）用の
   動かし続けるとくり返す。カーソルは動かない。
 - **カーソルの速さ**：常時の倍率と、押している間だけ遅くするキー。
 - **ドラッグロック・修飾キーロック**：クリックや Ctrl などを押しっぱなしにするキー。
+- **ロックランプ**：つないだキーボードの Caps Lock などのランプは PC の状態に合わせて点く。
 - **設定は保存される**：書き込み直しても Vial の設定は消えない。初期状態は `default.vil` の内容。
 
 ## 使い始める
@@ -146,7 +147,7 @@ QMK 本体は持たず、GitHub Actions がビルドのたびに本家
 | パス | 役割 |
 | --- | --- |
 | `keyboards/sekigon/keyboard_quantizer/parser/` | つないだ機器の HID 記述子を表にし（`hid_desc`）、届いたレポートを読み解く（`hid_report`） |
-| `keyboards/sekigon/keyboard_quantizer/mini/` | USB ホスト（core1）から core0 へのキュー（`hid_queue`）、入力からキーの行列へ（`hid_input`）、USB のコールバックと LED（`hid_host`） |
+| `keyboards/sekigon/keyboard_quantizer/mini/` | USB ホスト（core1）から core0 へのキュー（`hid_queue`）、入力からキーの行列へ（`hid_input`）、USB のコールバックと LED（`hid_host`）、接続時の記述子の下見（`hid_scan`） |
 | `.../mini/keymaps/vial/` | Vial 用キーマップ（下の表）、`vial.json`（Vial の画面）、`default.vil`（初期設定） |
 | `patches/` | QMK 本体への小さな修正 |
 | `tools/test/` | パソコン上で動かすテスト |
