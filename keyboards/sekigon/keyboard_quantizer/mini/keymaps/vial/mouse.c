@@ -48,12 +48,14 @@ static uint8_t current_buttons(void) {
     return b;
 }
 
+/* Up to one report's worth of motion. The descriptor declares X / Y as
+ * -XY_REPORT_MAX..XY_REPORT_MAX: XY_REPORT_MIN (one lower) is never sent. */
 static mouse_xy_report_t take_axis(int32_t *pending) {
     int32_t v = *pending;
     if (v > XY_REPORT_MAX) {
         v = XY_REPORT_MAX;
-    } else if (v < XY_REPORT_MIN) {
-        v = XY_REPORT_MIN;
+    } else if (v < -XY_REPORT_MAX) {
+        v = -XY_REPORT_MAX;
     }
     *pending -= v;
     return (mouse_xy_report_t)v;

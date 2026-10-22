@@ -221,14 +221,14 @@ void os_override_refresh(void) {
     last_swap = swap;
 }
 
-static const setting_def_t *def_by_via_id(uint8_t id, setting_t *out) {
+static bool setting_by_via_id(uint8_t id, setting_t *out) {
     for (uint8_t s = 0; s < SETTING_COUNT; s++) {
         if (defs[s].via_id == id) {
             *out = (setting_t)s;
-            return &defs[s];
+            return true;
         }
     }
-    return NULL;
+    return false;
 }
 
 /* data: command, channel, value id, value. */
@@ -249,7 +249,7 @@ void settings_via_command(uint8_t *data, uint8_t length) {
             }
             if (data[2] == VIA_ID_RESET) {
                 mouse_reset_settings_and_latches();
-            } else if (def_by_via_id(data[2], &s) != NULL) {
+            } else if (setting_by_via_id(data[2], &s)) {
                 settings_set(s, data[3]);
             }
             break;
@@ -257,7 +257,7 @@ void settings_via_command(uint8_t *data, uint8_t length) {
             if (length < 4) {
                 break;
             }
-            data[3] = def_by_via_id(data[2], &s) != NULL ? values[s] : 0;
+            data[3] = setting_by_via_id(data[2], &s) ? values[s] : 0;
             break;
         case id_custom_save:
             save_now();

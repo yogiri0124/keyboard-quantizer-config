@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+enum { MOUSE_BTN1 = 1 << 0, MOUSE_BTN2 = 1 << 1, MOUSE_BTN3 = 1 << 2 };
+
 typedef struct {
     uint8_t buttons;
     int16_t x;
