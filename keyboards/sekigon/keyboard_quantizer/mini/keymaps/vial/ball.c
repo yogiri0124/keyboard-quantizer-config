@@ -48,8 +48,8 @@ static uint16_t gesture_keycode(gesture_dir_t d) {
 
 typedef struct {
     bool          valid;
-    layer_state_t layers; /* layer_state | default_layer_state it was read for */
-    uint16_t      read_at;
+    layer_state_t layers;    /* layer_state | default_layer_state it was read for */
+    uint32_t      read_at;   /* 32-bit: the ball may rest for minutes */
     bool          by_layout; /* the top layer turns gestures on by itself */
     uint8_t       diagonals; /* gesture_cfg_t.diagonals */
 } keymap_info_t;
@@ -80,12 +80,12 @@ static bool layer_uses_gestures(uint8_t layer) {
 
 static const keymap_info_t *keymap_info(void) {
     layer_state_t layers = layer_state | default_layer_state;
-    if (info.valid && info.layers == layers && timer_elapsed(info.read_at) < KEYMAP_INFO_MS) {
+    if (info.valid && info.layers == layers && timer_elapsed32(info.read_at) < KEYMAP_INFO_MS) {
         return &info;
     }
     info.valid     = true;
     info.layers    = layers;
-    info.read_at   = timer_read();
+    info.read_at   = timer_read32();
     info.by_layout = layer_uses_gestures(get_highest_layer(layers));
     info.diagonals = 0;
     /* Diagonals take part only where a key is mapped. */

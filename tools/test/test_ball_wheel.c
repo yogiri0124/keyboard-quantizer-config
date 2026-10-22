@@ -24,7 +24,7 @@
 static uint16_t   km[8][MATRIX_ROWS][MATRIX_COLS];
 layer_state_t     layer_state;
 layer_state_t     default_layer_state = 1;
-static uint16_t   now                 = 1000;
+static uint32_t   now                 = 1000;
 static uint8_t    mods;
 static uint8_t    room = 7;
 static bool       tap_hold_pending;
@@ -85,10 +85,16 @@ void action_exec(keyevent_t event) {
     }
 }
 uint16_t timer_read(void) {
-    return now;
+    return (uint16_t)now;
 }
 uint16_t timer_elapsed(uint16_t last) {
-    return (uint16_t)(now - last);
+    return (uint16_t)((uint16_t)now - last);
+}
+uint32_t timer_read32(void) {
+    return now;
+}
+uint32_t timer_elapsed32(uint32_t last) {
+    return now - last;
 }
 uint8_t get_mods(void) {
     return mods;
@@ -100,7 +106,7 @@ uint8_t get_oneshot_mods(void) {
     return 0;
 }
 void wait_ms(uint32_t ms) {
-    now = (uint16_t)(now + ms);
+    now += ms;
 }
 bool usb_endpoint_in_is_inactive(usb_endpoint_in_t *e) {
     (void)e;
@@ -296,16 +302,16 @@ static void test_wheel_mods_and_keys(void) {
     CHECK(!wheel_process_record(KC_MS_WH_UP, &r), "WH key reached QMK");
     take_all(&v, &h);
     CHECK_EQ(v, 120);
-    now = (uint16_t)(now + 99);
+    now += 99;
     wheel_task();
     CHECK(!scroll_out_pending(), "repeat before the delay");
-    now = (uint16_t)(now + 2);
+    now += 2;
     wheel_task();
     take_all(&v, &h);
     CHECK_EQ(v, 120);
     r.event.pressed = false;
     wheel_process_record(KC_MS_WH_UP, &r);
-    now = (uint16_t)(now + 200);
+    now += 200;
     wheel_task();
     CHECK(!scroll_out_pending(), "repeat after release");
 }
@@ -334,7 +340,7 @@ static void test_ball_gestures(void) {
     move(60, 0);
     CHECK(n_taps == 1 && taps[0].kc == KC_A && taps[0].key.row == 31, "right gesture: %d taps", n_taps);
     CHECK(motion_x == 0, "gesture moved the cursor");
-    now = (uint16_t)(now + 200);
+    now += 200;
     scan(); /* the stroke ends */
     move(40, -40);
     CHECK(n_taps == 2 && taps[1].kc == KC_B, "up-right gesture gave 0x%04X", taps[1].kc);
@@ -342,11 +348,28 @@ static void test_ball_gestures(void) {
     /* Without the diagonal mapped, the same move is right or up. */
     km[1][31][GESTURE_UP_RIGHT] = KC_TRNS;
     km[1][31][GESTURE_UP]       = KC_TRNS;
-    now                         = (uint16_t)(now + 500);
+    now                         = now + 500;
     scan();
     move(45, -40);
     move(10, 0);
     CHECK(n_taps == 3 && taps[2].kc == KC_A, "fallback gave %d taps, 0x%04X", n_taps, taps[2].kc);
+    modes_hold_key(KQ_MODE_GESTURE, false, false);
+
+    /* After the ball rested for over a minute (a 16-bit clock wraps), a
+     * keymap change made meanwhile is read, not an old cached view. */
+    fresh();
+    km[1][31][GESTURE_RIGHT]    = KC_A;
+    km[1][31][GESTURE_UP_RIGHT] = KC_B;
+    modes_hold_key(KQ_MODE_GESTURE, true, false);
+    move(40, -40);
+    CHECK(n_taps == 1 && taps[0].kc == KC_B, "diagonal before the rest: %d taps", n_taps);
+    now += 200;
+    scan();
+    now += 65536 - 200;
+    km[1][31][GESTURE_UP_RIGHT] = KC_TRNS; /* unmapped in Vial while resting */
+    move(45, -40);
+    move(10, 0);
+    CHECK(n_taps == 2 && taps[1].kc == KC_A, "after the rest: %d taps, 0x%04X", n_taps, taps[1].kc);
     modes_hold_key(KQ_MODE_GESTURE, false, false);
 
     /* No room in QMK's queue: the tap waits, then goes. */
@@ -365,7 +388,7 @@ static void test_ball_gestures(void) {
     modes_hold_key(KQ_MODE_GESTURE, true, false);
     room = 0;
     move(-60, 0);
-    now = (uint16_t)(now + 50);
+    now += 50;
     move(-60, 0);
     scan();
     CHECK(n_taps == 1 && !modes_active(KQ_MODE_GESTURE), "CLR gesture: %d taps", n_taps);

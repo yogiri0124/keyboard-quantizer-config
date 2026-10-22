@@ -182,10 +182,20 @@ static bool remove_interface(uint8_t interface) {
     return changed;
 }
 
+/* Whether the interface has a device whose descriptor knows this report. */
+static bool known_report(uint8_t interface, const uint8_t *data, uint8_t len) {
+    const hid_device_t *dev = hid_desc_device(interface);
+    if (dev == NULL || len == 0) {
+        return false;
+    }
+    return hid_desc_find_report(dev, dev->uses_ids ? data[0] : 0) != NULL;
+}
+
 static bool handle_report(uint8_t interface, const uint8_t *data, uint8_t len) {
     hid_decoded_t d;
     if (!hid_report_decode(interface, data, len, &d)) {
-        if (hid_desc_device(interface) == NULL) {
+        /* Otherwise it was a keyboard's rollover error, which keeps its keys. */
+        if (!known_report(interface, data, len)) {
             stats.unknown_reports++;
         }
         return false;

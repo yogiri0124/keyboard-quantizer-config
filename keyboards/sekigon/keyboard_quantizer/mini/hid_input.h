@@ -38,20 +38,22 @@ void kq_mouse_scan_end(void);                   /* once per scan, after the repo
 void kq_mouse_device_lost(void);                /* a mouse went away, or the last device */
 void kq_vendor_report(uint16_t page, const uint8_t *data, uint8_t len);
 
+/* Diagnostics for the CLI. Counts wrap at 2^32 (a mouse at 1000 reports a
+ * second takes 49 days). */
 typedef struct {
-    uint16_t keyboard;
-    uint16_t mouse;
-    uint16_t consumer;
-    uint16_t system;
-    uint16_t other;
-    uint16_t last_consumer; /* usage sent to the host */
+    uint32_t keyboard;
+    uint32_t mouse;
+    uint32_t consumer;
+    uint32_t system;
+    uint32_t other;
+    uint32_t unknown_reports; /* no device, or a Report ID its descriptor lacks */
+    uint16_t last_consumer;   /* usage sent to the host */
     uint16_t last_system;
     uint16_t last_other_page;
     uint16_t last_buttons;
     int16_t  last_wheel; /* last non-zero, signed as the device sent it */
     int16_t  last_pan;
     uint16_t last_undefined;
-    uint16_t unknown_reports; /* no device or no matching report */
 } hid_input_stats_t;
 
 hid_input_stats_t hid_input_stats(void);

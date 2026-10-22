@@ -122,6 +122,10 @@ void gesture_reset(gesture_t *g) {
 }
 
 static void end_stroke(gesture_t *g) {
+    /* The rest that ended it is longer than the tap interval, so the next
+     * stroke's first tap need not wait (and a 16-bit last_tap from minutes
+     * ago could wrongly make it). */
+    g->tapped   = false;
     g->active   = false;
     g->dir      = GESTURE_NONE;
     g->sum_x    = 0;

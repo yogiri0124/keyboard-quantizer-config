@@ -224,11 +224,12 @@ static void print_descriptors(void) {
 static void print_hid_stats(void) {
     hid_input_stats_t s = hid_input_stats();
     hidq_stats_t      q = hidq_stats();
-    printf("kb %u  mouse %u  consumer %u last=0x%04X  system %u last=0x%04X\n", (unsigned)s.keyboard, (unsigned)s.mouse,
-           (unsigned)s.consumer, (unsigned)s.last_consumer, (unsigned)s.system, (unsigned)s.last_system);
-    printf("other %u last page=0x%04X  buttons 0x%04X  undefined 0x%04X  unknown %u\n", (unsigned)s.other,
+    printf("kb %lu  mouse %lu  consumer %lu last=0x%04X  system %lu last=0x%04X\n", (unsigned long)s.keyboard,
+           (unsigned long)s.mouse, (unsigned long)s.consumer, (unsigned)s.last_consumer, (unsigned long)s.system,
+           (unsigned)s.last_system);
+    printf("other %lu last page=0x%04X  buttons 0x%04X  undefined 0x%04X  unknown %lu\n", (unsigned long)s.other,
            (unsigned)s.last_other_page, (unsigned)s.last_buttons, (unsigned)s.last_undefined,
-           (unsigned)s.unknown_reports);
+           (unsigned long)s.unknown_reports);
     /* HID and QMK both mean "up" and "right" by a positive value; the ELECOM
      * HUGE PLUS sends a left tilt as positive pan (see wheel.c). */
     printf("wheel %d  pan %d  (last non-zero, as the device sent them)\n", (int)s.last_wheel, (int)s.last_pan);

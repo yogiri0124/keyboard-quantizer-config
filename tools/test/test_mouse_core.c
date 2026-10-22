@@ -39,6 +39,13 @@ static void test_modes(void) {
     CHECK(modes_active(KQ_MODE_GESTURE), "HOLD not active");
     modes_hold_key(KQ_MODE_GESTURE, false, true);
     CHECK(!modes_active(KQ_MODE_GESTURE), "HOLD left the mode on");
+    /* A HOLD of exactly 65536 passes is still a HOLD. */
+    modes_hold_key(KQ_MODE_GESTURE, true, true);
+    for (uint32_t i = 0; i < 65536; i++) {
+        modes_new_pass();
+    }
+    modes_hold_key(KQ_MODE_GESTURE, false, true);
+    CHECK(!modes_active(KQ_MODE_GESTURE), "a long HOLD read as a TAP");
 
     /* Oneshots are exclusive and the key toggles its own. */
     modes_oneshot_key(KQ_MODE_SCROLL, true);

@@ -101,6 +101,13 @@ static void test_matrix(void) {
     CHECK_EQ(mouse_reports, 3);
     CHECK_EQ(last_x, 0);
 
+    /* A Report ID the descriptor lacks is ignored, and counted. */
+    uint32_t unknown   = hid_input_stats().unknown_reports;
+    uint8_t  strange[] = {0x09, 0x01, 0x00};
+    hidq_push_report(17, strange, sizeof strange);
+    CHECK(!hid_input_scan(m), "unknown report ID changed the matrix");
+    CHECK_EQ(hid_input_stats().unknown_reports, unknown + 1);
+
     /* Unplugging keyboard 2 releases its keys only; unplugging the mouse
      * releases the button and reports the loss. */
     hidq_push_unmount(32);

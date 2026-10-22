@@ -13,7 +13,7 @@
 
 typedef struct {
     uint8_t  count;
-    uint16_t press_pass[MAGIC_HOLD_MAX];
+    uint32_t press_pass[MAGIC_HOLD_MAX];
 } magic_holds_t;
 
 typedef struct {
@@ -21,7 +21,7 @@ typedef struct {
     magic_holds_t hold_magic;
     bool          toggle;
     bool          toggle_magic; /* turned on by a tap dance TAP: ends with the next key */
-    uint16_t      toggle_press_pass;
+    uint32_t      toggle_press_pass;
     bool          oneshot;
 } mode_state_t;
 
@@ -33,7 +33,9 @@ static struct {
     bool          latched; /* a tap dance TAP: until the next key */
 } slow_scroll;
 
-static uint16_t pass;
+/* 32 bits: a HOLD lasting a whole wrap of a 16-bit count (seconds of main
+ * loop passes) would read as a TAP. */
+static uint32_t pass;
 
 void modes_new_pass(void) {
     pass++;

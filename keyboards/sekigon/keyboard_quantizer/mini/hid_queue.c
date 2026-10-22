@@ -103,7 +103,7 @@ static slot_t *slot_for(uint8_t interface, uint8_t report_id) {
         if (!s->valid && spare == NULL) {
             spare = s;
         }
-        if (s->stamp < oldest->stamp) {
+        if ((int32_t)(s->stamp - oldest->stamp) < 0) { /* wrap-safe, as in due_slot() */
             oldest = s;
         }
     }

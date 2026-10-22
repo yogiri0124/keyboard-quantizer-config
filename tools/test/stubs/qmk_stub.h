@@ -53,6 +53,8 @@ void send_string(const char *string);
 void     action_exec(keyevent_t event);
 uint16_t timer_read(void);
 uint16_t timer_elapsed(uint16_t last);
+uint32_t timer_read32(void);
+uint32_t timer_elapsed32(uint32_t last);
 void     host_mouse_send(report_mouse_t *report);
 
 /* platforms/gpio.h, quantum/led.h, quantum/matrix.h */
