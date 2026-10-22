@@ -53,8 +53,8 @@ static void magic_press(magic_holds_t *h) {
     if (h->count == UINT8_MAX) {
         return;
     }
-    uint8_t slot           = h->count < MAGIC_HOLD_MAX ? h->count : MAGIC_HOLD_MAX - 1;
-    h->press_pass[slot]    = pass;
+    uint8_t slot        = h->count < MAGIC_HOLD_MAX ? h->count : MAGIC_HOLD_MAX - 1;
+    h->press_pass[slot] = pass;
     h->count++;
 }
 

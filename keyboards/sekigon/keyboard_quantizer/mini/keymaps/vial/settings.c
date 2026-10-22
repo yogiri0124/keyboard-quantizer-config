@@ -105,7 +105,7 @@ static void apply_os_override(uint8_t mode) {
 static void set_defaults(void) {
     for (uint8_t s = 0; s < SETTING_COUNT; s++) {
         values[s] = defs[s].def;
-        mouse_setting_changed((setting_t)s);
+        ball_setting_changed((setting_t)s);
     }
 }
 
@@ -118,7 +118,6 @@ void settings_init(void) {
 }
 
 void settings_load(void) {
-    os_key_override_init();
     config.raw    = eeconfig_read_user();
     bool repaired = false;
     if (config.os_override > OS_OVERRIDE_JP_ON_US) {
@@ -130,7 +129,7 @@ void settings_load(void) {
         bool ok   = saved[s] >= defs[s].min && saved[s] <= defs[s].max;
         values[s] = ok ? saved[s] : defs[s].def;
         repaired |= !ok;
-        mouse_setting_changed((setting_t)s);
+        ball_setting_changed((setting_t)s);
     }
     if (repaired) {
         save_now();
@@ -163,7 +162,7 @@ void settings_set(setting_t s, uint8_t value) {
     uint8_t v = clamp(s, value);
     if (v != values[s]) {
         values[s] = v;
-        mouse_setting_changed(s);
+        ball_setting_changed(s);
     }
     save_later();
 }

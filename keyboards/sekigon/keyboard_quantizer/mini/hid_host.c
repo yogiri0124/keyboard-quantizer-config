@@ -2,9 +2,12 @@
 // Copyright 2026 yogiri0124
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-/* TinyUSB host callbacks. They run on core1, so they only queue (hid_queue.h)
- * and never touch core0 state. Also the status LED and the keyboard's lock
- * LEDs (Caps Lock etc.), which run on core0. */
+/* TinyUSB host callbacks, the keyboard's lock LEDs and the status LED.
+ *
+ * The callbacks run on core1 with the USB host stack. They queue what
+ * arrives (hid_queue.h) and never touch core0 state; core0 only publishes
+ * the lock LED state it wants, and core1 sends it, since TinyUSB's host API
+ * is not safe to call from the other core. */
 
 #include QMK_KEYBOARD_H
 
@@ -14,19 +17,45 @@
 #define KQ_PIN_LED 7
 #define LED_BLINK_MS 50
 
-static volatile uint8_t  kbd_addr;
-static volatile uint8_t  kbd_instance;
-/* The LED report goes out asynchronously: TinyUSB keeps a pointer to it
- * until the transfer completes, so it lives here and is not touched while
- * led_busy. */
-static uint8_t           led_report;
-static volatile bool     led_busy;
-static volatile bool     activity;      /* set by core1 on mount / report */
-static uint16_t          blink_start;   /* core0 */
-static bool              blinking;      /* core0 */
+/* Core1. */
+static uint8_t kbd_addr; /* the keyboard interface that shows lock LEDs, 0: none */
+static uint8_t kbd_instance;
+static uint8_t led_sent;
+static bool    led_known; /* led_sent reached the current keyboard */
+/* The output report goes out asynchronously and TinyUSB keeps a pointer to
+ * it until done: it lives here and is not touched while led_busy. */
+static uint8_t       led_report;
+static volatile bool led_busy;
+
+/* Core0 -> core1. */
+static volatile uint8_t led_wanted;
+/* Core1 -> core0. */
+static volatile bool activity;
+
+/* Core0. */
+static uint16_t blink_start;
+static bool     blinking;
 
 static uint8_t interface_id(uint8_t dev_addr, uint8_t instance) {
     return (uint8_t)(dev_addr * 16 + instance);
+}
+
+/* Core1: brings the keyboard's lock LEDs to what core0 wants. Called from
+ * every callback; mice report often enough for an LED change to go out at
+ * once. */
+static void sync_lock_leds(void) {
+    uint8_t wanted = led_wanted;
+    if (kbd_addr == 0 || led_busy || (led_known && wanted == led_sent)) {
+        return;
+    }
+    led_report = wanted;
+    led_busy   = true;
+    if (tuh_hid_set_report(kbd_addr, kbd_instance, 0, HID_REPORT_TYPE_OUTPUT, &led_report, sizeof(led_report))) {
+        led_sent  = wanted;
+        led_known = true;
+    } else {
+        led_busy = false; /* not started: try again with the next callback */
+    }
 }
 
 void tuh_mount_cb(uint8_t dev_addr) {
@@ -35,8 +64,11 @@ void tuh_mount_cb(uint8_t dev_addr) {
         if (tuh_hid_interface_protocol(dev_addr, instance) == HID_ITF_PROTOCOL_KEYBOARD) {
             kbd_addr     = dev_addr;
             kbd_instance = instance;
+            led_known    = false; /* a new keyboard: tell it the current state */
+            led_busy     = false;
         }
     }
+    sync_lock_leds();
 }
 
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_report, uint16_t desc_len) {
@@ -61,34 +93,20 @@ void tuh_hid_set_report_complete_cb(uint8_t dev_addr, uint8_t instance, uint8_t 
     (void)report_type;
     (void)len;
     led_busy = false;
+    sync_lock_leds(); /* it may have changed meanwhile */
 }
 
 void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *report, uint16_t len) {
     activity = true;
     hidq_push_report(interface_id(dev_addr, instance), report, len);
     tuh_hid_receive_report(dev_addr, instance);
+    sync_lock_leds();
 }
 
 void matrix_init_kb(void) {
     gpio_set_pin_output_push_pull(KQ_PIN_LED);
     gpio_write_pin_high(KQ_PIN_LED);
     matrix_init_user();
-}
-
-/* The connected keyboard shows the host's Caps Lock / Num Lock state. */
-static void sync_lock_leds(void) {
-    static uint8_t sent;
-    uint8_t        leds = host_keyboard_leds();
-    if (leds == sent || kbd_addr == 0 || led_busy) {
-        return;
-    }
-    led_report = leds;
-    led_busy   = true;
-    if (tuh_hid_set_report(kbd_addr, kbd_instance, 0, HID_REPORT_TYPE_OUTPUT, &led_report, sizeof(led_report))) {
-        sent = leds;
-    } else {
-        led_busy = false; /* not started: try again next time */
-    }
 }
 
 /* One short blink (low = on) when USB input arrives, then off for as long
@@ -113,6 +131,7 @@ static void blink_status_led(void) {
 }
 
 void housekeeping_task_kb(void) {
-    sync_lock_leds();
+    /* The PC's Caps Lock / Num Lock state, for the connected keyboard. */
+    led_wanted = host_keyboard_leds();
     blink_status_led();
 }

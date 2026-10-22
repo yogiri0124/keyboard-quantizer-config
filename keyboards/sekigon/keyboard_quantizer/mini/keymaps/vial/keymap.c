@@ -25,6 +25,7 @@
 #include "identity.h"
 #include "mouse.h"
 #include "mouse_keys.h"
+#include "os_key_override.h"
 #include "settings.h"
 
 /* The default keymap (keymaps[]): default.vil, the layout as Vial saves it,
@@ -77,6 +78,8 @@ void eeconfig_init_user(void) {
 }
 
 void keyboard_post_init_user(void) {
+    /* Vial has loaded its key overrides; the JP/US ones go after them. */
+    os_key_override_init();
     mouse_init();
     settings_load();
 }

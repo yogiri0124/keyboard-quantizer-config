@@ -58,8 +58,8 @@ typedef struct {
     local_usage_t usage_max;
     bool          has_min;
     bool          has_max;
-    uint8_t  delimiter_depth;
-    uint8_t  delimiter_sets; /* sets closed so far; only the first is used */
+    uint8_t       delimiter_depth;
+    uint8_t       delimiter_sets; /* sets closed so far; only the first is used */
 } local_state_t;
 
 typedef struct {
@@ -312,19 +312,18 @@ static void local_item(compiler_t *c, uint8_t tag, uint32_t raw, uint8_t bytes) 
     }
 }
 
-static hid_device_t *slot_for(uint8_t interface) {
+static hid_device_t *free_device(void) {
     for (uint8_t i = 0; i < HID_DESC_DEVICES; i++) {
         if (!devices[i].in_use) {
             return &devices[i];
         }
     }
-    (void)interface;
     return NULL;
 }
 
 bool hid_desc_compile(uint8_t interface, const uint8_t *desc, uint16_t len) {
     hid_desc_remove(interface);
-    hid_device_t *dev = slot_for(interface);
+    hid_device_t *dev = free_device();
     if (dev == NULL) {
         return false;
     }

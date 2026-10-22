@@ -20,8 +20,8 @@
 extern void tusb_print_debug_buffer(void);
 
 #define CLI_BUFFER_SIZE 1024
-static CLI_UINT           cliBuffer[BYTES_TO_CLI_UINTS(CLI_BUFFER_SIZE)];
-static EmbeddedCli       *cli             = NULL;
+static CLI_UINT     cliBuffer[BYTES_TO_CLI_UINTS(CLI_BUFFER_SIZE)];
+static EmbeddedCli *cli = NULL;
 
 void virtser_recv(uint8_t c) {
     if (cli != NULL) {
@@ -262,26 +262,18 @@ void cli_init(void) {
         return;
     }
     cli->writeChar = writeChar;
-    embeddedCliAddBinding(
-        cli, (CliCommandBinding){"version", "Show version", false, NULL,
-                                 onVersion});
-    embeddedCliAddBinding(
-        cli, (CliCommandBinding){"piousb", "Pio usb status", false, NULL,
-                                 onPioUsbStatus});
-    embeddedCliAddBinding(cli, (CliCommandBinding){"dfu", "jump to bootloader",
-                                                   false, NULL, onDfu});
-    embeddedCliAddBinding(
-        cli, (CliCommandBinding){"debug", "toggle debug option", false, NULL,
-                                 onDebug});
-    embeddedCliAddBinding(
-        cli, (CliCommandBinding){"mouse", "Show/set mouse settings", true, NULL,
-                                 onMouse});
-    embeddedCliAddBinding(
-        cli, (CliCommandBinding){"ovr", "JP/US key override: off|uj|ju", true, NULL,
-                                 onOvr});
-    embeddedCliAddBinding(
-        cli, (CliCommandBinding){"hid", "HID report counts; hid desc", true,
-                                 NULL, onHid});
+    static const CliCommandBinding commands[] = {
+        {"version", "Show version", false, NULL, onVersion},
+        {"piousb", "Pio usb status", false, NULL, onPioUsbStatus},
+        {"dfu", "jump to bootloader", false, NULL, onDfu},
+        {"debug", "toggle debug option", false, NULL, onDebug},
+        {"mouse", "Show/set mouse settings", true, NULL, onMouse},
+        {"ovr", "JP/US key override: off|uj|ju", true, NULL, onOvr},
+        {"hid", "HID report counts; hid desc", true, NULL, onHid},
+    };
+    for (uint8_t i = 0; i < sizeof(commands) / sizeof(commands[0]); i++) {
+        embeddedCliAddBinding(cli, commands[i]);
+    }
 }
 
 void cli_exec(void) {

@@ -1,3 +1,11 @@
+// Copyright 2023 sekigon-gonnoc
+// Copyright 2026 yogiri0124
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+/* Raw HID: answers VIA and Vial alike (via.c is built with its handler
+ * renamed, see rules.mk), and takes the custom values of the Mouse menu
+ * (settings.c) whichever of the two asks. */
+
 #include <stdbool.h>
 
 #include "raw_hid.h"

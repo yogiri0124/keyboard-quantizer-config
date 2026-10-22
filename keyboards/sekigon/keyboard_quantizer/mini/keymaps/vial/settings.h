@@ -45,5 +45,5 @@ void        os_override_refresh(void); /* re-apply if the Alt/GUI swap changed *
 /* VIA custom values (vial.json Mouse menu). */
 void settings_via_command(uint8_t *data, uint8_t length);
 
-/* Called when a value changes (mouse.c drops state that depended on it). */
-void mouse_setting_changed(setting_t s);
+/* Called when a value changes (ball.c drops state that depended on it). */
+void ball_setting_changed(setting_t s);

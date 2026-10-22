@@ -1,8 +1,9 @@
 #!/bin/sh
 # Builds and runs the host tests: the parts of the firmware that are plain C
 # (HID parser, queues, gesture, cursor, scroll, modes) compiled for this
-# machine and checked against known cases.
-#   tools/test/run.sh            (CC overrides the compiler)
+# machine and checked against known cases, and the descriptor checker the
+# build runs on the firmware (tools/hid_descriptors.py).
+#   tools/test/run.sh            (CC / PYTHON override the compiler / python)
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -28,3 +29,5 @@ run queue "$root/tools/test/test_queue.c" "$kq/mini/hid_queue.c"
 run input "$root/tools/test/test_input.c" "$kq/mini/hid_input.c" "$kq/mini/hid_queue.c" "$kq/parser/hid_desc.c" "$kq/parser/hid_report.c"
 
 run mouse_core -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 "$root/tools/test/test_mouse_core.c" "$vial/modes.c" "$vial/pointer.c" "$vial/gesture.c" "$vial/scroll_out.c"
+
+${PYTHON:-python3} -B "$root/tools/test/test_hid_descriptors.py"

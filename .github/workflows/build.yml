@@ -37,7 +37,8 @@ jobs:
       - name: Host tests
         # The plain-C parts of the firmware (HID parser, USB event queue,
         # input -> matrix, ball modes, cursor, gesture, scroll output),
-        # compiled for the runner and checked against known cases.
+        # compiled for the runner and checked against known cases, and the
+        # HID descriptor checker used below.
         working-directory: config
         run: TMPDIR="$RUNNER_TEMP" sh tools/test/run.sh
 
@@ -114,7 +115,6 @@ jobs:
         # reaches the device. The decoded dump also goes to the job summary.
         working-directory: qmk
         run: |
-          python3 ../config/tools/test_hid_descriptors.py
           status=0
           python3 ../config/tools/hid_descriptors.py .build/*.elf --max-report-bytes 32 > hid.txt 2>&1 || status=$?
           cat hid.txt

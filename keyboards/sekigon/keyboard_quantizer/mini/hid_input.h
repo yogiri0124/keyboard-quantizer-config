@@ -24,7 +24,6 @@
 
 #define KQ_MATRIX_ROWS 32
 #define KQ_ROW_MODIFIERS 0
-#define KQ_ROW_VIRTUAL 31
 
 /* Processes queued events into matrix (KQ_MATRIX_ROWS rows of 8 columns),
  * stopping at the first report that changes it (QMK compares the matrix once
