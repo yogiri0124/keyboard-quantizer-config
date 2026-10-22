@@ -12,8 +12,15 @@
 #include QMK_KEYBOARD_H
 
 #include "tusb.h"
+#include "hid_desc.h"
 #include "hid_queue.h"
 #include "hid_scan.h"
+
+/* What TinyUSB can hand over (tusb_config.h) must fit what is kept. */
+_Static_assert(CFG_TUH_HID_EPIN_BUFSIZE <= HIDQ_REPORT_MAX, "a report fits a queue record");
+_Static_assert(CFG_TUH_ENUMERATION_BUFSIZE <= HIDQ_DESC_MAX, "a report descriptor fits a queue record");
+_Static_assert(CFG_TUH_HID <= HID_DESC_DEVICES, "every HID interface gets a descriptor table");
+_Static_assert(CFG_TUH_HID <= 16 && CFG_TUH_DEVICE_MAX + CFG_TUH_HUB < 16, "interface_id fits in a byte");
 
 #define KQ_PIN_LED 7
 #define LED_BLINK_MS 50
