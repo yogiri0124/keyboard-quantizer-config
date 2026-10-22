@@ -40,3 +40,4 @@ run ball_wheel -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DMOUS
 
 ${PYTHON:-python3} -B "$root/tools/test/test_hid_descriptors.py"
 ${PYTHON:-python3} -B "$root/tools/test/test_vil_to_c.py"
+${PYTHON:-python3} -B "$root/tools/test/test_build_id.py"

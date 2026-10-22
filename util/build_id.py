@@ -6,7 +6,8 @@ firmware came up empty. Here the id comes from the sources that decide where
 and how that configuration is stored: the saved configuration survives a
 reflash, and is reset when any of them changes (then default.vil is written
 in again, see keymaps/vial/default_config.c). Comments and blank space are
-left out, so editing a comment does not reset anything.
+left out, and so are the source lists of this keymap's rules.mk: editing a
+comment or adding a source file does not reset anything.
 
 Run by builddefs/build_keyboard.mk from the QMK root.
 """
@@ -51,6 +52,12 @@ COMMENT = re.compile(
 )
 
 
+# Lines of this keymap's rules.mk that only say what to build, not what is
+# stored (QMK's own make files are hashed whole: their OPT_DEFS can be).
+KEYMAP_RULES = KEYBOARD + '/keymaps/vial/rules.mk'
+MAKE_BUILD_ONLY = re.compile(rb'^\s*(SRC|VPATH|CFLAGS|GIT_DESCRIBE|OPT_DEFS|EXTRAINCDIRS)\b|^\s*(include|\$\()')
+
+
 def significant(path, data):
     data = data.replace(b'\r\n', b'\n')
     if path.endswith('.json'):
@@ -60,20 +67,26 @@ def significant(path, data):
             v = {k: v.get(k) for k in ('matrix', 'tap_dance_entries', 'combo_entries', 'key_override_entries')}
         return json.dumps(v, sort_keys=True).encode()
     data = COMMENT.sub(b'', data)
-    return b'\n'.join(line.strip() for line in data.split(b'\n') if line.strip())
+    lines = [line.strip() for line in data.split(b'\n') if line.strip()]
+    if path == KEYMAP_RULES:
+        lines = [line for line in lines if not MAKE_BUILD_ONLY.search(line)]
+    return b'\n'.join(lines)
 
 
-def main():
+def compute(root='.'):
     h = hashlib.sha256()
     for path in LAYOUT_FILES:
         h.update(path.encode() + b'\0')
-        if os.path.exists(path):
-            with open(path, 'rb') as f:
+        full = os.path.join(root, path)
+        if os.path.exists(full):
+            with open(full, 'rb') as f:
                 h.update(significant(path, f.read()))
     build_id = int.from_bytes(h.digest()[:3], 'little')
-    if build_id == 0xFFFFFF:  # what an invalidated EEPROM holds
-        build_id = 0xFFFFFE
-    print("#define BUILD_ID ((uint32_t)0x{:08X})".format(build_id))
+    return 0xFFFFFE if build_id == 0xFFFFFF else build_id  # 0xFFFFFF: what an invalidated EEPROM holds
+
+
+def main():
+    print("#define BUILD_ID ((uint32_t)0x{:08X})".format(compute()))
 
 
 if __name__ == "__main__":
