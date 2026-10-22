@@ -106,8 +106,13 @@ static void test_lock_leds(void) {
     tuh_hid_report_received_cb(1, 0, motion, sizeof motion);
     CHECK(n_sent == 0, "LEDs sent with only a mouse: %d", n_sent);
 
-    /* A keyboard gets the current state as soon as it is mounted. */
+    /* A keyboard gets the current state once the device is mounted, not
+     * while its interfaces are (that would break the enumeration). */
     tuh_hid_mount_cb(2, 0, keyboard, sizeof keyboard);
+    tuh_hid_report_received_cb(1, 0, motion, sizeof motion);
+    tuh_mount_cb(1); /* another device */
+    CHECK_EQ(n_sent, 0);
+    tuh_mount_cb(2);
     CHECK(n_sent == 1 && sent[0].addr == 2 && sent[0].instance == 0 && sent[0].report_id == 0 &&
               sent[0].type == HID_REPORT_TYPE_OUTPUT && sent[0].len == 1 && sent[0].data[0] == 0x02,
           "mount: %d sent", n_sent);
@@ -138,6 +143,9 @@ static void test_lock_leds(void) {
      * the old one's transfer is still running; that one's completion then
      * does not free the buffer the new transfer uses. */
     tuh_hid_mount_cb(3, 1, keyboard_id3, sizeof keyboard_id3);
+    tuh_hid_report_received_cb(1, 0, motion, sizeof motion);
+    CHECK_EQ(n_sent, 3);
+    tuh_mount_cb(3);
     CHECK(n_sent == 4 && sent[3].addr == 3 && sent[3].instance == 1 && sent[3].report_id == 3 && sent[3].len == 2 &&
               sent[3].data[0] == 3 && sent[3].data[1] == 0x01,
           "report ID keyboard: %d sent", n_sent);
@@ -152,8 +160,10 @@ static void test_lock_leds(void) {
     set_host_leds(0x00);
     tuh_hid_report_received_cb(1, 0, motion, sizeof motion);
     CHECK_EQ(n_sent, 5);
-    /* Plugged in again: the state goes out at once. */
+    /* Plugged in again: the state goes out once it is mounted. */
     tuh_hid_mount_cb(3, 1, keyboard_id3, sizeof keyboard_id3);
+    CHECK_EQ(n_sent, 5);
+    tuh_mount_cb(3);
     CHECK(n_sent == 6 && sent[5].data[1] == 0x00, "replug: %d sent", n_sent);
 }
 

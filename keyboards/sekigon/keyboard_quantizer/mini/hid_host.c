@@ -29,6 +29,7 @@ _Static_assert(CFG_TUH_HID <= 16 && CFG_TUH_DEVICE_MAX + CFG_TUH_HUB < 16, "inte
 static uint8_t kbd_addr; /* the interface that shows lock LEDs, 0: none */
 static uint8_t kbd_instance;
 static uint8_t kbd_report_id; /* of its LED output report, 0: none */
+static bool    kbd_ready;     /* its device has finished enumerating */
 static uint8_t led_sent;
 static bool    led_known; /* led_sent reached the current keyboard */
 /* The output report goes out asynchronously and TinyUSB keeps a pointer to
@@ -55,7 +56,7 @@ static uint8_t interface_id(uint8_t dev_addr, uint8_t instance) {
  * once. */
 static void sync_lock_leds(void) {
     uint8_t wanted = led_wanted;
-    if (kbd_addr == 0 || led_busy || (led_known && wanted == led_sent)) {
+    if (kbd_addr == 0 || !kbd_ready || led_busy || (led_known && wanted == led_sent)) {
         return;
     }
     uint8_t n = 0;
@@ -72,8 +73,11 @@ static void sync_lock_leds(void) {
     }
 }
 
+/* The whole device is set up: from now on its control pipe is free. */
 void tuh_mount_cb(uint8_t dev_addr) {
-    (void)dev_addr;
+    if (dev_addr == kbd_addr) {
+        kbd_ready = true;
+    }
     activity = true;
     sync_lock_leds();
 }
@@ -81,16 +85,19 @@ void tuh_mount_cb(uint8_t dev_addr) {
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_report, uint16_t desc_len) {
     hidq_push_mount(interface_id(dev_addr, instance), desc_report, desc_len);
     /* The lock LEDs go to the interface that has them, the newest one when
-     * several do; tell it the current state. */
+     * several do. Its state goes out from tuh_mount_cb, not from here: the
+     * device is still being enumerated (its other interfaces are set up
+     * next over the same control pipe), and a SET_REPORT before that ends
+     * breaks it: those interfaces never mount and no report arrives. */
     hid_scan_t scan;
     hid_scan(desc_report, desc_len, &scan);
     if (scan.has_led_output) {
         kbd_addr      = dev_addr;
         kbd_instance  = instance;
         kbd_report_id = scan.led_report_id;
+        kbd_ready     = false;
         led_known     = false;
         led_busy      = false;
-        sync_lock_leds();
     }
     tuh_hid_receive_report(dev_addr, instance);
 }
@@ -101,6 +108,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
         kbd_addr      = 0;
         kbd_instance  = 0;
         kbd_report_id = 0;
+        kbd_ready     = false;
         led_busy      = false; /* its transfer will not complete */
     }
 }
