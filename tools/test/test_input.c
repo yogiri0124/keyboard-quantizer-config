@@ -77,6 +77,10 @@ static void test_matrix(void) {
     CHECK(hid_input_scan(m) && cell(0xE9), "usage E9 missing");
     kb(32, 0, 0x05, 0);
     CHECK(hid_input_scan(m) && !cell(0xE9), "usage E9 stuck");
+    /* F0..F7 would be row 31, the gesture cells (F8.. past the matrix): never
+     * from a device. */
+    kb(32, 0, 0x05, 0xF1);
+    CHECK(!hid_input_scan(m) && m[31] == 0, "usage F1 reached row 31");
 
     /* Press and release of C in one go: two scans, one change each. */
     kb(16, 0x02, 0x04, 0x06);

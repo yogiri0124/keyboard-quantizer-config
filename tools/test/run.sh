@@ -3,7 +3,9 @@
 # machine (against the QMK stand-ins in stubs/ where it includes QMK) and
 # checked against known cases, then the Python tools the build runs
 # (descriptor checker, default.vil conversion, build id).
-#   tools/test/run.sh            (CC / PYTHON override the compiler / python)
+#   tools/test/run.sh            (CC / PYTHON override the compiler / python;
+#                                 HOST_TEST_FLAGS adds compiler flags, e.g.
+#                                 -fsanitize=address where it is supported)
 set -eu
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -12,7 +14,7 @@ vial="$kq/mini/keymaps/vial"
 out=${TMPDIR:-/tmp}/kq-host-tests
 mkdir -p "$out"
 cc=${CC:-cc}
-flags="-std=gnu11 -Wall -Wextra -Wshadow -Wswitch-enum -Wpointer-arith -Wundef -Werror -Wno-unused-parameter -g -fsanitize=undefined -fsanitize-undefined-trap-on-error -I$root/tools/test -I$kq/parser -I$kq/mini -I$vial"
+flags="-std=gnu11 -Wall -Wextra -Wshadow -Wswitch-enum -Wpointer-arith -Wundef -Werror -Wno-unused-parameter -g -fsanitize=undefined -fsanitize-undefined-trap-on-error ${HOST_TEST_FLAGS:-} -I$root/tools/test -I$kq/parser -I$kq/mini -I$vial"
 
 run() {
     name=$1

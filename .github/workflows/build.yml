@@ -40,6 +40,9 @@ jobs:
         # workflow runs (default.vil conversion, build id, HID descriptor
         # checker).
         working-directory: config
+        env:
+          # Out-of-bounds reads and writes fail the tests too.
+          HOST_TEST_FLAGS: -fsanitize=address -fno-omit-frame-pointer
         run: TMPDIR="$RUNNER_TEMP" sh tools/test/run.sh
 
       - name: Checkout upstream QMK tree
