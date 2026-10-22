@@ -83,7 +83,7 @@ typedef struct {
  * has no device. */
 bool hid_desc_compile(uint8_t interface, const uint8_t *desc, uint16_t len);
 void hid_desc_remove(uint8_t interface);
-void hid_desc_clear(void);
+void hid_desc_clear(void); /* tests: forget every device */
 
 const hid_device_t *hid_desc_device(uint8_t interface);
 /* The input report a received report belongs to: by its first byte when the
