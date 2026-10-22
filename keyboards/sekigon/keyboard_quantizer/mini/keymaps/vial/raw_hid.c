@@ -17,57 +17,40 @@
 extern void raw_hid_receive_vial(uint8_t *data, uint8_t length);
 extern void raw_hid_receive_qmk(uint8_t *data, uint8_t length);
 
+/* The VIA protocol version each client expects. */
 #define VIAL_SUPPORT_VIA_VERSION 0x0009
 #define QMK_SUPPORT_VIA_VERSION 0x000C
 
-static bool is_vial_enabled = false;
+/* Vial asked for the keyboard id: from then on it is Vial talking. */
+static bool vial_client;
 
-static bool pre_raw_hid_receive(uint8_t *msg, uint8_t len) {
-    bool _continue = true;
-
-    if (msg == NULL || len == 0) {
-        return false;
-    }
-
-    // Override VIA protocol version
-    if (len >= 3 && msg[0] == id_get_protocol_version) {
-        const uint16_t via_version = is_vial_enabled ? VIAL_SUPPORT_VIA_VERSION : QMK_SUPPORT_VIA_VERSION;
-        msg[1]                     = via_version >> 8;
-        msg[2]                     = via_version & 0xFF;
-
-        _continue = false;
-    } else if (len >= 2 && msg[0] == 0xfe) {
-        switch (msg[1]) {
-            case vial_get_keyboard_id: {
-                is_vial_enabled = true;
-                _continue = true; // vial id is set in vial.c
-            } break;
-        }
-    }
-
-    if (!_continue) {
-        raw_hid_send(msg, len);
-    }
-
-    return _continue;
-}
-
-static bool is_custom_value_command(uint8_t command_id) {
-    return command_id == id_custom_set_value || command_id == id_custom_get_value || command_id == id_custom_save;
+static bool is_custom_value_command(uint8_t command) {
+    return command == id_custom_set_value || command == id_custom_get_value || command == id_custom_save;
 }
 
 void raw_hid_receive(uint8_t *data, uint8_t length) {
-    if (!pre_raw_hid_receive(data, length)) {
+    if (data == NULL || length == 0) {
         return;
     }
-    // Vial via.c aliases 0x07/0x08/0x09 as lighting and never forwards channel 0.
-    if (length >= 2 && is_custom_value_command(data[0]) && data[1] == id_custom_channel) {
+    uint8_t command = data[0];
+    if (command == id_get_protocol_version && length >= 3) {
+        uint16_t version = vial_client ? VIAL_SUPPORT_VIA_VERSION : QMK_SUPPORT_VIA_VERSION;
+        data[1]          = (uint8_t)(version >> 8);
+        data[2]          = (uint8_t)version;
+        raw_hid_send(data, length);
+        return;
+    }
+    if (command == id_vial_prefix && length >= 2 && data[1] == vial_get_keyboard_id) {
+        vial_client = true; /* vial.c answers it */
+    }
+    /* Vial's via.c reads 0x07..0x09 as lighting and never passes channel 0
+     * on: take the Mouse menu here, for both clients. */
+    if (is_custom_value_command(command) && length >= 2 && data[1] == id_custom_channel) {
         settings_via_command(data, length);
         raw_hid_send(data, length);
         return;
     }
-    uint8_t command = data[0];
-    if (is_vial_enabled) {
+    if (vial_client) {
         raw_hid_receive_vial(data, length);
     } else {
         raw_hid_receive_qmk(data, length);
@@ -79,21 +62,15 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
     }
 }
 
+/* Commands neither via.c knows. A custom value command wrapped in
+ * id_unhandled (as some VIA custom UI sends it) is the Mouse menu too. */
 void raw_hid_receive_kb(uint8_t *data, uint8_t length) {
     if (data == NULL || length == 0) {
         return;
     }
-
-    uint8_t *command_id = &(data[0]);
-
-    // VIA custom UI for Vial wraps set/get/save in id_unhandled.
-    if (*command_id == id_unhandled && length > 2 && is_custom_value_command(data[1])) {
+    if (data[0] == id_unhandled && length > 2 && is_custom_value_command(data[1])) {
         settings_via_command(&data[1], (uint8_t)(length - 1));
         return;
     }
-    if (is_custom_value_command(*command_id)) {
-        settings_via_command(data, length);
-        return;
-    }
-    *command_id = id_unhandled;
+    data[0] = id_unhandled;
 }

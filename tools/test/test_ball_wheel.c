@@ -126,10 +126,11 @@ void mouse_send_direct(const report_mouse_t *m) {
     direct_h += m->h;
     direct_sends++;
 }
-void mouse_inject_begin(void) {
+void mouse_tap_cell(keypos_t pos, uint16_t hold_ms) {
     inject_depth++;
-}
-void mouse_inject_end(void) {
+    action_exec((keyevent_t){.type = KEY_EVENT, .key = pos, .pressed = true, .time = timer_read() | 1});
+    wait_ms(hold_ms);
+    action_exec((keyevent_t){.type = KEY_EVENT, .key = pos, .pressed = false, .time = timer_read() | 1});
     inject_depth--;
 }
 bool mouse_injecting(void) {

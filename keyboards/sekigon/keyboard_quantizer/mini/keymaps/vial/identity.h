@@ -23,7 +23,7 @@ static inline keypos_t gesture_pos(gesture_dir_t d) {
     return (keypos_t){.row = GESTURE_ROW, .col = (uint8_t)d};
 }
 
-/* An event on a gesture cell: only gesture taps (mouse.c) make those. */
+/* An event on a gesture cell: only gesture taps (ball.c) make those. */
 static inline bool gesture_is_cell_event(const keyrecord_t *record) {
     return IS_KEYEVENT(record->event) && record->event.key.row == GESTURE_ROW;
 }

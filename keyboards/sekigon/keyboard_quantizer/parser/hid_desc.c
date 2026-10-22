@@ -334,23 +334,23 @@ bool hid_desc_compile(uint8_t interface, const uint8_t *desc, uint16_t len) {
     memset(&c, 0, sizeof(c));
     c.dev = dev;
 
-    uint16_t pos = 0;
+    uint32_t pos = 0;
     while (desc != NULL && pos < len) {
         uint8_t prefix = desc[pos];
         if (prefix == 0xFE) {
             /* Long item: prefix, bDataSize, bLongItemTag, data. None of them
              * describe input fields. */
-            if (pos + 2 >= len) {
+            if (pos + 1 >= len) {
                 break;
             }
-            pos = (uint16_t)(pos + 3 + desc[pos + 1]);
+            pos += 3u + desc[pos + 1];
             continue;
         }
         uint8_t bytes = (uint8_t)(prefix & 0x03);
         if (bytes == 3) {
             bytes = 4;
         }
-        if ((uint32_t)pos + 1 + bytes > len) {
+        if (pos + 1 + bytes > len) {
             break; /* truncated item: stop, keep what was complete */
         }
         uint32_t raw = 0;
@@ -366,7 +366,7 @@ bool hid_desc_compile(uint8_t interface, const uint8_t *desc, uint16_t len) {
         } else if (type == ITEM_LOCAL) {
             local_item(&c, tag, raw, bytes);
         }
-        pos = (uint16_t)(pos + 1 + bytes);
+        pos += 1u + bytes;
     }
 
     if (dev->field_count == 0) {
@@ -461,7 +461,7 @@ bool hid_field_array_usage(const hid_device_t *dev, const hid_field_t *f, int32_
     if (value < f->logical_min || value > f->logical_max) {
         return false;
     }
-    uint32_t idx = (uint32_t)(value - f->logical_min);
+    uint32_t idx = (uint32_t)value - (uint32_t)f->logical_min; /* no signed overflow */
     if (f->list_len > 0) {
         if (idx >= f->list_len) {
             return false;

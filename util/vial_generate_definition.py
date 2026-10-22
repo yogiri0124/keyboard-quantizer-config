@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""Compresses vial.json into the firmware (replaces vial-qmk's own copy).
+
+The same as upstream's, except that vial.json is read as UTF-8 whatever the
+build machine's locale: it holds Japanese labels.
+"""
+
 import sys
 import json
 import lzma

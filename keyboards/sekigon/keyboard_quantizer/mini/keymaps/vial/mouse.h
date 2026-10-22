@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "action.h"
 #include "report.h"
 
 void mouse_request_send(void);
@@ -20,10 +21,10 @@ void mouse_add_motion(int32_t x, int32_t y); /* cursor counts */
  * already has (wheel.c: scrolling that must beat a modifier release). */
 void mouse_send_direct(const report_mouse_t *motion);
 
-/* Our own key taps (wheel cells, gesture cells) are not "the next key" a
- * oneshot waits for. */
-void mouse_inject_begin(void);
-void mouse_inject_end(void);
+/* Our own key taps (wheel cells, gesture cells): a press and, hold_ms
+ * later, a release of the cell at pos, run through QMK like a key. They are
+ * not "the next key" a oneshot waits for. */
+void mouse_tap_cell(keypos_t pos, uint16_t hold_ms);
 bool mouse_injecting(void);
 /* Whether one more injected tap (press and release) fits in QMK's queues
  * right now (patches/0004): while a tap-hold key is undecided, QMK queues

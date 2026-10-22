@@ -147,13 +147,15 @@ QMK 本体は持たず、GitHub Actions がビルドのたびに本家
 | パス | 役割 |
 | --- | --- |
 | `keyboards/sekigon/keyboard_quantizer/parser/` | つないだ機器の HID 記述子を表にし（`hid_desc`）、届いたレポートを読み解く（`hid_report`） |
-| `keyboards/sekigon/keyboard_quantizer/mini/` | USB ホスト（core1）から core0 へのキュー（`hid_queue`）、入力からキーの行列へ（`hid_input`）、USB のコールバックと LED（`hid_host`）、接続時の記述子の下見（`hid_scan`） |
+| `keyboards/sekigon/keyboard_quantizer/mini/` | USB ホスト（core1）から core0 へのキュー（`hid_queue`）、入力からキーの行列へ（`hid_input`、QMK 側は `matrix.c`）、USB のコールバックと LED（`hid_host`）、接続時の記述子の下見（`hid_scan`） |
+| `.../mini/info.json` | 本家との違いは `device_version` だけ。PC に送る HID 記述子を変えたら上げる（Windows は記述子をこの番号ごとに覚えていて、同じ番号だと古い記述子を使い続ける） |
 | `.../mini/keymaps/vial/` | Vial 用キーマップ（下の表）、`vial.json`（Vial の画面）、`default.vil`（初期設定） |
 | `patches/` | QMK 本体への小さな修正 |
 | `tools/test/` | パソコン上で動かすテスト |
 | `tools/vil_to_c.py` | `default.vil` をファームウェアの初期設定に変換する |
 | `tools/hid_descriptors.py` | ビルドした `.elf` の HID 記述子を検証する |
 | `util/build_id.py` | 保存した設定を書き込み直しても残すための識別子 |
+| `util/vial_generate_definition.py` | `vial.json` をファームウェアに埋め込む。本家との違いは、日本語を含む `vial.json` を常に UTF-8 で読むことだけ |
 | `upstream.env` | 土台にする本家のコミット |
 
 `keymaps/vial/` の中身：
@@ -202,10 +204,12 @@ Lenovo ThinkPad キーボードは横スクロールをベンダーのレポー�
 
 ### テスト
 
-`tools/test/run.sh` が、QMK に依存しない部分（記述子とレポートの読み解き、キュー、
-入力から行列、モード、マウス用キーの解除規則、ボールの行き先とジェスチャーのタップ、ホイールのマス、カーソル、ジェスチャー、スクロール出力、設定の保存、ドラッグ・修飾キーロック、マウスの報告、マクロの再生）を
-パソコン向けにコンパイルして確かめ、Python の道具（記述子の検証、`default.vil` の変換）も
-確かめる。Actions はビルドの前に実行する。手元では
+`tools/test/run.sh` が、ファームウェアのコード（記述子とレポートの読み解き、キュー、
+入力から行列、モード、マウス用キーの解除規則、ボールの行き先とジェスチャーのタップ、
+ホイールのマス、カーソル、ジェスチャー、スクロール出力、設定の保存、ドラッグ・修飾キーロック、
+マウスの報告、マクロの再生）をパソコン向けにコンパイルして確かめる。QMK の関数が要るところは
+`tools/test/stubs/` の代わりの部品をつなぐ。Python の道具（記述子の検証、`default.vil` の変換、
+`build_id.py`）も確かめる。Actions はビルドの前に実行する。手元では
 
 ```sh
 sh tools/test/run.sh

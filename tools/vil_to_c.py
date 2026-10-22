@@ -6,9 +6,10 @@
 The header holds two parts: with KQ_DEFAULT_KEYMAP defined, the default
 keymap (QMK's keymaps[], which QMK wants in keymap.c); with KQ_DEFAULT_DATA,
 the tap dances, combos, key overrides, macros and QMK Settings that
-default_config.c writes when the saved configuration is reset. Keycode names are resolved to numbers
-here, from the names Vial itself uses (the _Static_assert table in the QMK
-tree's quantum/vial_ensure_keycode.h), so the .vil works as saved by Vial.
+default_config.c writes when the saved configuration is reset. Keycode
+names are resolved to numbers here, from the names Vial itself uses (the
+_Static_assert table in the QMK tree's quantum/vial_ensure_keycode.h), so
+the .vil works as saved by Vial.
 """
 
 import json

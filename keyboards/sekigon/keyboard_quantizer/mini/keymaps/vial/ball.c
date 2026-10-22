@@ -140,14 +140,10 @@ char ball_mode_letter(void) {
 
 /* Taps the gesture cell itself, like a key: whatever is mapped there runs,
  * tap dances and LCTL(kc) included, and if QMK holds the tap back while a
- * tap-hold key decides, it still resolves to that cell's key later. */
+ * tap-hold key decides, it still resolves to that cell's key later. Held
+ * for QMK's tap code delay, as tap_code() would. */
 static void tap_gesture_cell(gesture_dir_t d) {
-    keypos_t pos = gesture_pos(d);
-    mouse_inject_begin();
-    action_exec((keyevent_t){.type = KEY_EVENT, .key = pos, .pressed = true, .time = timer_read() | 1});
-    qs_wait_ms(QS_tap_code_delay);
-    action_exec((keyevent_t){.type = KEY_EVENT, .key = pos, .pressed = false, .time = timer_read() | 1});
-    mouse_inject_end();
+    mouse_tap_cell(gesture_pos(d), QS_tap_code_delay);
 }
 
 /* Taps that waited for room in QMK's queue go first, in order. */
@@ -236,6 +232,8 @@ void ball_reset(void) {
     info.valid    = false;
 }
 
+/* Needed before the first report: a zeroed gesture_t reads as a stroke
+ * already heading right (GESTURE_RIGHT is 0). */
 void ball_init(void) {
     ball_reset();
 }

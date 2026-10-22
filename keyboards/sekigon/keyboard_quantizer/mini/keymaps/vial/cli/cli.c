@@ -1,4 +1,5 @@
 // Copyright 2023 sekigon-gonnoc
+// Copyright 2026 yogiri0124
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #define EMBEDDED_CLI_IMPL
@@ -170,9 +171,10 @@ static const char *kind_name(hid_kind_t k) {
             return "consumer";
         case HID_KIND_SYSTEM:
             return "system";
-        default:
-            return "other";
+        case HID_KIND_OTHER:
+            break;
     }
+    return "other";
 }
 
 /* The compiled descriptors: per interface, each input report and its

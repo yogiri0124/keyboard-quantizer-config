@@ -19,19 +19,19 @@ void hid_scan(const uint8_t *desc, uint16_t len, hid_scan_t *out) {
     /* The two globals this needs, with Push / Pop. */
     uint16_t page = 0, page_stack[STACK_DEPTH];
     uint8_t  id = 0, id_stack[STACK_DEPTH], sp = 0;
-    uint16_t pos = 0;
+    uint32_t pos = 0;
     while (desc != NULL && pos < len) {
         uint8_t prefix = desc[pos];
         if (prefix == ITEM_LONG) {
             if (pos + 1 >= len) {
                 break;
             }
-            pos = (uint16_t)(pos + 3 + desc[pos + 1]);
+            pos += 3u + desc[pos + 1];
             continue;
         }
         uint8_t bytes = (uint8_t)(prefix & 0x03);
         bytes         = bytes == 3 ? 4 : bytes;
-        if ((uint32_t)pos + 1 + bytes > len) {
+        if (pos + 1 + bytes > len) {
             break;
         }
         uint32_t raw = 0;
@@ -69,6 +69,6 @@ void hid_scan(const uint8_t *desc, uint16_t len, hid_scan_t *out) {
             default:
                 break;
         }
-        pos = (uint16_t)(pos + 1 + bytes);
+        pos += 1u + bytes;
     }
 }

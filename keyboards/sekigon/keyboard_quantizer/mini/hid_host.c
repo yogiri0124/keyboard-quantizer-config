@@ -99,11 +99,14 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
 
 void tuh_hid_set_report_complete_cb(uint8_t dev_addr, uint8_t instance, uint8_t report_id, uint8_t report_type,
                                     uint16_t len) {
-    (void)dev_addr;
-    (void)instance;
     (void)report_id;
     (void)report_type;
     (void)len;
+    /* Only the current keyboard's transfer frees led_report: one still
+     * finishing for a keyboard that was replaced does not. */
+    if (dev_addr != kbd_addr || instance != kbd_instance) {
+        return;
+    }
     led_busy = false;
     sync_lock_leds(); /* it may have changed meanwhile */
 }

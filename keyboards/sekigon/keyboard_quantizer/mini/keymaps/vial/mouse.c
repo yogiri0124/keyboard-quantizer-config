@@ -108,14 +108,14 @@ void pointing_device_keycode_handler(uint16_t keycode, bool pressed) {
 
 /* -------------------------------------------------------------- inject */
 
-void mouse_inject_begin(void) {
+void mouse_tap_cell(keypos_t pos, uint16_t hold_ms) {
     inject_depth++;
-}
-
-void mouse_inject_end(void) {
-    if (inject_depth > 0) {
-        inject_depth--;
+    action_exec((keyevent_t){.type = KEY_EVENT, .key = pos, .pressed = true, .time = timer_read() | 1});
+    if (hold_ms > 0) {
+        wait_ms(hold_ms);
     }
+    action_exec((keyevent_t){.type = KEY_EVENT, .key = pos, .pressed = false, .time = timer_read() | 1});
+    inject_depth--;
 }
 
 bool mouse_injecting(void) {

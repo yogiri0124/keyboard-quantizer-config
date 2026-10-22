@@ -16,7 +16,7 @@
     &ko_make_with_layers_and_negmods(0, kc, kc_override, ~0, \
                                      (uint8_t)MOD_MASK_SHIFT)
 
-int register_os_key_override(const key_override_t *override);
+void register_os_key_override(const key_override_t *override);
 void register_os_key_override_list(const key_override_t **list, uint8_t count);
 void remove_all_os_key_overrides(void);
 

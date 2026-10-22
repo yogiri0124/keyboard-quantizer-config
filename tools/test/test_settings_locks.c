@@ -90,6 +90,19 @@ int32_t scroll_out_host_multiplier(bool vertical) {
     (void)vertical;
     return 120;
 }
+/* Key events QMK was handed: what mouse_tap_cell sends. */
+static keyevent_t events[4];
+static int        n_events;
+static bool       injecting_seen[4];
+void              action_exec(keyevent_t e) {
+    if (n_events < 4) {
+        injecting_seen[n_events] = mouse_injecting();
+        events[n_events++]       = e;
+    }
+}
+void wait_ms(uint32_t ms) {
+    now = (uint16_t)(now + ms);
+}
 
 /* ---- stand-ins for ball.c and wheel.c ---- */
 
@@ -304,11 +317,30 @@ static void test_mouse_report(void) {
     CHECK(mouse_can_tap(), "no tap with two free slots");
 }
 
+/* ---- injected taps ---- */
+
+static void test_tap_cell(void) {
+    keypos_t pos = {.row = 31, .col = 2};
+    uint16_t t0  = now;
+    n_events     = 0;
+    mouse_tap_cell(pos, 10);
+    CHECK(n_events == 2 && events[0].pressed && !events[1].pressed, "tap events: %d", n_events);
+    CHECK(events[0].key.row == 31 && events[0].key.col == 2 && events[1].key.col == 2, "tap position");
+    CHECK(events[0].type == KEY_EVENT && events[0].time != 0 && events[1].time != 0, "tap event type / time");
+    CHECK((uint16_t)(now - t0) == 10 && (uint16_t)(events[1].time - events[0].time) >= 10, "held %u ms",
+          (unsigned)(uint16_t)(now - t0));
+    CHECK(injecting_seen[0] && injecting_seen[1] && !mouse_injecting(), "inject flag around the tap");
+    n_events = 0;
+    mouse_tap_cell(pos, 0);
+    CHECK(n_events == 2 && now == (uint16_t)(t0 + 10), "a zero hold waited");
+}
+
 int main(void) {
     test_settings_load();
     test_settings_via_and_keys();
     test_os_override();
     test_locks();
     test_mouse_report();
+    test_tap_cell();
     return check_done("settings / locks / report");
 }

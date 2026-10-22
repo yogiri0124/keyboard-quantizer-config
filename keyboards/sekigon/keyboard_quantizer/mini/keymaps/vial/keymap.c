@@ -35,7 +35,7 @@
 
 /* QMK's keycode lookup (quantum/keymap_common.c), with one addition: layer
  * 0's gesture cells are layer 1's. Gestures tap their cell like a key
- * (mouse.c), so QMK resolves them as it does any key, also when it holds a
+ * (ball.c), so QMK resolves them as it does any key, also when it holds a
  * tap back while a tap-hold key decides. Layer 0 is the base layout, whose
  * gesture cells stay empty, so it reads layer 1's. */
 uint16_t keymap_key_to_keycode(uint8_t layer, keypos_t key) {

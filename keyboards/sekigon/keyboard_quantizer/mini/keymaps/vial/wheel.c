@@ -164,16 +164,12 @@ void wheel_physical(int16_t wheel, int16_t pan) {
  * QMK's queues right now waits in the backlog (mouse_can_tap). */
 static void tap_cells(int32_t *backlog, bool vertical, uint8_t *budget) {
     while (*backlog != 0 && *budget > 0 && mouse_can_tap()) {
-        uint16_t kc  = cell_kc_for(*backlog, vertical);
-        keypos_t key = identity_pos(kc);
-        uint16_t t   = timer_read() | 1;
+        uint16_t kc = cell_kc_for(*backlog, vertical);
         /* Taken out first: the key may be CLR, which empties the backlog. */
         *backlog -= cell_detent(kc);
         (*budget)--;
-        mouse_inject_begin();
-        action_exec((keyevent_t){.key = key, .type = KEY_EVENT, .pressed = true, .time = t});
-        action_exec((keyevent_t){.key = key, .type = KEY_EVENT, .pressed = false, .time = t});
-        mouse_inject_end();
+        /* Not held for the tap code delay: a spin taps several per scan. */
+        mouse_tap_cell(identity_pos(kc), 0);
     }
 }
 

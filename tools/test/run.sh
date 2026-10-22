@@ -1,8 +1,8 @@
 #!/bin/sh
-# Builds and runs the host tests: the parts of the firmware that are plain C
-# (HID parser, queues, gesture, cursor, scroll, modes) compiled for this
-# machine and checked against known cases, and the descriptor checker the
-# build runs on the firmware (tools/hid_descriptors.py).
+# Builds and runs the host tests: the firmware's own code compiled for this
+# machine (against the QMK stand-ins in stubs/ where it includes QMK) and
+# checked against known cases, then the Python tools the build runs
+# (descriptor checker, default.vil conversion, build id).
 #   tools/test/run.sh            (CC / PYTHON override the compiler / python)
 set -eu
 
@@ -12,7 +12,7 @@ vial="$kq/mini/keymaps/vial"
 out=${TMPDIR:-/tmp}/kq-host-tests
 mkdir -p "$out"
 cc=${CC:-cc}
-flags="-std=gnu11 -Wall -Wextra -Wshadow -Wswitch-enum -Wpointer-arith -Wundef -Werror -Wno-unused-parameter -g -I$root/tools/test -I$kq/parser -I$kq/mini -I$vial"
+flags="-std=gnu11 -Wall -Wextra -Wshadow -Wswitch-enum -Wpointer-arith -Wundef -Werror -Wno-unused-parameter -g -fsanitize=undefined -fsanitize-undefined-trap-on-error -I$root/tools/test -I$kq/parser -I$kq/mini -I$vial"
 
 run() {
     name=$1

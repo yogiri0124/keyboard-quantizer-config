@@ -256,6 +256,15 @@ static void test_robustness(void) {
     for (int i = 0; i < 20; i++) {
         CHECK(hid_desc_compile(9, boot_keyboard, sizeof boot_keyboard), "recompile %d failed", i);
     }
+    /* An array over the whole int32 range: the index must not overflow. */
+    hid_field_t wide = {.logical_min = INT32_MIN, .logical_max = INT32_MAX, .usage_min = 4, .usage_max = 6};
+    uint16_t    usage = 0;
+    CHECK(hid_field_array_usage(NULL, &wide, INT32_MIN + 1, &usage) && usage == 5, "wide array usage %u", usage);
+    CHECK(!hid_field_array_usage(NULL, &wide, 100, &usage), "wide array value past the usages");
+    /* A long item claiming more bytes than are left ends the parse. */
+    static const uint8_t long_past_end[] = {0xFE, 0xFF, 0x10};
+    CHECK(!hid_desc_compile(7, long_past_end, sizeof long_past_end), "long item past the end");
+    hid_scan(long_past_end, sizeof long_past_end, &(hid_scan_t){0});
 }
 
 /* The quick core1 look: Report IDs, and where the lock LEDs are. */

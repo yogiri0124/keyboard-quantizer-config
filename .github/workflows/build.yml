@@ -35,10 +35,10 @@ jobs:
           grep -E '^[A-Za-z_][A-Za-z0-9_]*=' config/upstream.env | tr -d '\r' >> "$GITHUB_ENV"
 
       - name: Host tests
-        # The plain-C parts of the firmware (HID parser, USB event queue,
-        # input -> matrix, ball modes, cursor, gesture, scroll output),
-        # compiled for the runner and checked against known cases, and the
-        # HID descriptor checker used below.
+        # The firmware's own code compiled for the runner, against stand-ins
+        # for QMK where it needs them (tools/test), and the Python tools this
+        # workflow runs (default.vil conversion, build id, HID descriptor
+        # checker).
         working-directory: config
         run: TMPDIR="$RUNNER_TEMP" sh tools/test/run.sh
 

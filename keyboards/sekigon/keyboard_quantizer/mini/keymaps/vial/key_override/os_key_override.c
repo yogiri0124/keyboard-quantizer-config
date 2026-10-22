@@ -21,32 +21,26 @@ static const key_override_t  *override_ptrs[VIAL_KEY_OVERRIDE_ENTRIES + OS_KEY_O
 
 void os_key_override_init(void) {
     /* Copy Vial's 32 slots once. Vial always fills them (disabled entries are
-     * dummy structs, not NULL), so process_key_override can walk into OS
-     * overrides at index 32. Re-init must not NULL that slot if OS entries
-     * are already registered. */
+     * dummy structs, not NULL) and later reloads them in place, so the copied
+     * pointers stay valid and process_key_override walks on into the OS
+     * overrides at index 32. */
     if (key_overrides != NULL && key_overrides != override_ptrs) {
         for (size_t i = 0; i < VIAL_KEY_OVERRIDE_ENTRIES; ++i) {
             override_ptrs[i] = key_overrides[i];
         }
     }
-    if (os_override_cnt == 0) {
-        override_ptrs[VIAL_KEY_OVERRIDE_ENTRIES] = NULL;
-    } else {
-        override_ptrs[VIAL_KEY_OVERRIDE_ENTRIES + os_override_cnt] = NULL;
-    }
-    key_overrides = override_ptrs;
+    override_ptrs[VIAL_KEY_OVERRIDE_ENTRIES + os_override_cnt] = NULL;
+    key_overrides                                              = override_ptrs;
 }
 
-int register_os_key_override(const key_override_t *override) {
+void register_os_key_override(const key_override_t *override) {
     os_key_override_init();
     if (override == NULL || os_override_cnt >= OS_KEY_OVERRIDE_ENTRIES) {
-        return -1;
+        return;
     }
-
     override_ptrs[VIAL_KEY_OVERRIDE_ENTRIES + os_override_cnt] = override;
     os_override_cnt++;
     override_ptrs[VIAL_KEY_OVERRIDE_ENTRIES + os_override_cnt] = NULL;
-    return 0;
 }
 
 void register_os_key_override_list(const key_override_t **list, uint8_t count) {
