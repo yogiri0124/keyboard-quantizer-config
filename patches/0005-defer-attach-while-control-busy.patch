@@ -1,0 +1,16 @@
+diff --git a/keyboards/sekigon/keyboard_quantizer/mini/lib/tinyusb/src/host/usbh.c b/keyboards/sekigon/keyboard_quantizer/mini/lib/tinyusb/src/host/usbh.c
+index f2935c2..98e5919 100644
+--- a/keyboards/sekigon/keyboard_quantizer/mini/lib/tinyusb/src/host/usbh.c
++++ b/keyboards/sekigon/keyboard_quantizer/mini/lib/tinyusb/src/host/usbh.c
+@@ -408,7 +408,10 @@ void tuh_task_ext(uint32_t timeout_ms, bool in_isr)
+       case HCD_EVENT_DEVICE_ATTACH:
+         // due to the shared _usbh_ctrl_buf, we must complete enumerating
+         // one device before enumerating another one.
+-        if ( _dev0.enumerating )
++        // Also wait while the application has a control transfer in flight
++        // (e.g. a keyboard LED SET_REPORT): enumeration asserts that its own
++        // first control transfer starts, and would otherwise stall for good.
++        if ( _dev0.enumerating || _ctrl_xfer.stage != CONTROL_STAGE_IDLE )
+         {
+           TU_LOG_USBH("[%u:] USBH Defer Attach until current enumeration complete\r\n", event.rhport);
+           osal_queue_send(_usbh_q, &event, in_isr);

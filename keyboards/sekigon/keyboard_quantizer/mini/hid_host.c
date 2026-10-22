@@ -53,7 +53,9 @@ static uint8_t interface_id(uint8_t dev_addr, uint8_t instance) {
 
 /* Core1: brings the keyboard's lock LEDs to what core0 wants. Called from
  * every callback; mice report often enough for an LED change to go out at
- * once. */
+ * once. TinyUSB has one control pipe for every device: never while the
+ * keyboard's own device is still enumerating (see tuh_hid_mount_cb), and a
+ * device attached meanwhile waits for this transfer (patches/0005). */
 static void sync_lock_leds(void) {
     uint8_t wanted = led_wanted;
     if (kbd_addr == 0 || !kbd_ready || led_busy || (led_known && wanted == led_sent)) {
