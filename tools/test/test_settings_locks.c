@@ -18,11 +18,11 @@
 
 /* ---- QMK stand-ins ---- */
 
-static uint32_t eeprom_user;
-static int      eeprom_writes;
-static uint16_t now = 1000;
-static uint8_t  mods, mousekey_buttons, room = 7;
-static int      override_us_jp, override_jp_us, override_removed;
+static uint32_t       eeprom_user;
+static int            eeprom_writes;
+static uint16_t       now = 1000;
+static uint8_t        mods, mousekey_buttons, room = 7;
+static int            override_us_jp, override_jp_us, override_removed;
 static report_mouse_t sent[8];
 static int            n_sent;
 keymap_config_t       keymap_config;
@@ -134,7 +134,7 @@ static void via(uint8_t command, uint8_t id, uint8_t value, uint8_t *out) {
 
 static void test_settings_load(void) {
     /* Fresh EEPROM (all zero): defaults, saved once. */
-    eeprom_user = 0;
+    eeprom_user   = 0;
     eeprom_writes = override_removed = 0;
     settings_load();
     CHECK(settings_get(SETTING_SCROLL_DIV) == 32 && settings_get(SETTING_GESTURE_STEP) == 50 &&

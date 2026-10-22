@@ -25,9 +25,9 @@
 
 typedef enum { BALL_CURSOR, BALL_SCROLL, BALL_GESTURE } ball_mode_t;
 
-static pointer_t     pointer;
-static gesture_t     gesture;
-static ball_mode_t   last_mode = BALL_CURSOR;
+static pointer_t   pointer;
+static gesture_t   gesture;
+static ball_mode_t last_mode = BALL_CURSOR;
 /* Gesture taps that had to wait for room in QMK's tap-hold queue. */
 static gesture_dir_t deferred_dir = GESTURE_NONE;
 static uint8_t       deferred_taps;
@@ -47,11 +47,11 @@ static uint16_t gesture_keycode(gesture_dir_t d) {
 }
 
 typedef struct {
-    bool         valid;
+    bool          valid;
     layer_state_t layers; /* layer_state | default_layer_state it was read for */
-    uint16_t     read_at;
-    bool         by_layout; /* the top layer turns gestures on by itself */
-    uint8_t      diagonals; /* gesture_cfg_t.diagonals */
+    uint16_t      read_at;
+    bool          by_layout; /* the top layer turns gestures on by itself */
+    uint8_t       diagonals; /* gesture_cfg_t.diagonals */
 } keymap_info_t;
 
 static keymap_info_t info;

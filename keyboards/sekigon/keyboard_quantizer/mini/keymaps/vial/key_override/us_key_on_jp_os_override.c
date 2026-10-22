@@ -11,6 +11,7 @@
 //
 // Perform as a US keyboard on JP systems
 //
+// clang-format off
 static const key_override_t *us_key_on_jp_os_overrides[] = {
     // KC_GRV override depends on OS
     w_shift(KC_GRV, JP_TILD),
@@ -33,13 +34,15 @@ static const key_override_t *us_key_on_jp_os_overrides[] = {
     wo_shift(KC_QUOT, JP_QUOT),
     w_shift(KC_QUOT, JP_DQUO),
 };
+// clang-format on
 
 _Static_assert(OS_OVERRIDE_LEN(us_key_on_jp_os_overrides) + 1 <= OS_KEY_OVERRIDE_ENTRIES,
                "US-on-JP OS overrides exceed OS_KEY_OVERRIDE_ENTRIES");
 
 // If ALT+GRV is pressed, send JP_ZKHK on windows
 // To do this, mask ALT in override config
-static const key_override_t *grv_override_jp_win = {&ko_make_with_layers_and_negmods(0, KC_GRV, JP_GRV, ~0, (uint8_t)MOD_MASK_SHIFT | MOD_MASK_ALT)};
+static const key_override_t *grv_override_jp_win = {
+    &ko_make_with_layers_and_negmods(0, KC_GRV, JP_GRV, ~0, (uint8_t)MOD_MASK_SHIFT | MOD_MASK_ALT)};
 
 // Always override KC_GRV to JP_GRV on Mac
 static const key_override_t *grv_override_jp_mac = {wo_shift(KC_GRV, JP_GRV)};

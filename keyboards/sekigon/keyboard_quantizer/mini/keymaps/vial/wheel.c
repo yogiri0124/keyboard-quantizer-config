@@ -18,7 +18,8 @@
 #define URGENT_MAX_REPORTS 512
 #define ENDPOINT_WAIT_MS 10
 
-_Static_assert(KC_MS_WH_DOWN == KC_MS_WH_UP + 1 && KC_MS_WH_LEFT == KC_MS_WH_UP + 2 && KC_MS_WH_RIGHT == KC_MS_WH_UP + 3,
+_Static_assert(KC_MS_WH_DOWN == KC_MS_WH_UP + 1 && KC_MS_WH_LEFT == KC_MS_WH_UP + 2 &&
+                   KC_MS_WH_RIGHT == KC_MS_WH_UP + 3,
                "wheel keycodes are consecutive");
 
 /* Wheel detents still to be tapped, as the device sent them. */

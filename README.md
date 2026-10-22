@@ -157,6 +157,7 @@ QMK 本体は持たず、GitHub Actions がビルドのたびに本家
 | `util/build_id.py` | 保存した設定を書き込み直しても残すための識別子 |
 | `util/vial_generate_definition.py` | `vial.json` をファームウェアに埋め込む。本家との違いは、日本語を含む `vial.json` を常に UTF-8 で読むことだけ |
 | `upstream.env` | 土台にする本家のコミット |
+| `.clang-format` | C の書式（QMK と同じで、1 行 120 桁で折り返す）。`clang-format -i` で整える |
 
 `keymaps/vial/` の中身：
 

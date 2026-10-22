@@ -17,7 +17,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define HID_DESC_DEVICES 8 /* one per TinyUSB HID instance (CFG_TUH_HID) */
+#define HID_DESC_DEVICES 8  /* one per TinyUSB HID instance (CFG_TUH_HID) */
 #define HID_DESC_REPORTS 12 /* input reports per device */
 #define HID_DESC_FIELDS 48  /* input fields per device */
 #define HID_DESC_USAGES 64  /* listed usages per device */
@@ -89,7 +89,7 @@ const hid_device_t *hid_desc_device(uint8_t interface);
 /* The input report a received report belongs to: by its first byte when the
  * device uses Report IDs. NULL if unknown. */
 const hid_report_t *hid_desc_find_report(const hid_device_t *dev, uint8_t id);
-bool hid_desc_has_kind(uint8_t interface, hid_kind_t kind);
+bool                hid_desc_has_kind(uint8_t interface, hid_kind_t kind);
 
 /* Element i of a field as a signed value (sign-extended when Logical Minimum
  * is negative). Bits past len read as 0. */

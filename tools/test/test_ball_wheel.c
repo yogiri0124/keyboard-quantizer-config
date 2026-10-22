@@ -21,16 +21,16 @@
 
 /* ---- simulated QMK ---- */
 
-static uint16_t      km[8][MATRIX_ROWS][MATRIX_COLS];
-layer_state_t        layer_state;
-layer_state_t        default_layer_state = 1;
-static uint16_t      now                 = 1000;
-static uint8_t       mods;
-static uint8_t       room = 7;
-static bool          tap_hold_pending;
-uint8_t              mk_wheel_delay      = 10; /* 100 ms */
-uint8_t              mk_wheel_interval   = 50;
-usb_endpoint_in_t    usb_endpoints_in[USB_ENDPOINT_IN_COUNT];
+static uint16_t   km[8][MATRIX_ROWS][MATRIX_COLS];
+layer_state_t     layer_state;
+layer_state_t     default_layer_state = 1;
+static uint16_t   now                 = 1000;
+static uint8_t    mods;
+static uint8_t    room = 7;
+static bool       tap_hold_pending;
+uint8_t           mk_wheel_delay    = 10; /* 100 ms */
+uint8_t           mk_wheel_interval = 50;
+usb_endpoint_in_t usb_endpoints_in[USB_ENDPOINT_IN_COUNT];
 
 static struct {
     keypos_t key;
@@ -163,10 +163,10 @@ static void fresh(void) {
             }
         }
     }
-    layer_state = 0;
-    mods        = 0;
-    room        = 7;
-    n_taps      = 0;
+    layer_state      = 0;
+    mods             = 0;
+    room             = 7;
+    n_taps           = 0;
     tap_hold_pending = false;
     motion_x = motion_y = direct_v = direct_h = 0;
     direct_sends                              = 0;

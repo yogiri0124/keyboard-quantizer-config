@@ -218,7 +218,8 @@ static void main_item(compiler_t *c, uint8_t tag, uint32_t raw) {
                 uint32_t u   = c->l.n_usages > 0 ? resolve(c, c->l.usages[0]) : ((uint32_t)c->g.usage_page << 16);
                 c->app_page  = (uint16_t)(u >> 16);
                 c->app_usage = (uint16_t)u;
-                c->app_kind  = (raw & 0xFF) == COLLECTION_APPLICATION ? kind_of(c->app_page, c->app_usage) : HID_KIND_OTHER;
+                c->app_kind =
+                    (raw & 0xFF) == COLLECTION_APPLICATION ? kind_of(c->app_page, c->app_usage) : HID_KIND_OTHER;
             }
             if (c->depth < 255) {
                 c->depth++;

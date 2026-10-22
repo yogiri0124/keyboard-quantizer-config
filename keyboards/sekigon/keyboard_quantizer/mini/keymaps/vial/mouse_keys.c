@@ -46,11 +46,13 @@ typedef struct {
     enum { KIND_HOLD, KIND_TOGGLE, KIND_ONESHOT } kind;
 } mode_key_t;
 
+// clang-format off
 static const mode_key_t mode_keys[] = {
     {U_SCR, KQ_MODE_SCROLL, KIND_HOLD},   {U_DSCR, KQ_MODE_SCROLL, KIND_TOGGLE},   {U_OSCR, KQ_MODE_SCROLL, KIND_ONESHOT},
     {U_GES, KQ_MODE_GESTURE, KIND_HOLD},  {U_TGES, KQ_MODE_GESTURE, KIND_TOGGLE},  {U_OGES, KQ_MODE_GESTURE, KIND_ONESHOT},
     {U_SLOW, KQ_MODE_SLOW, KIND_HOLD},    {U_TSLO, KQ_MODE_SLOW, KIND_TOGGLE},     {U_OSLO, KQ_MODE_SLOW, KIND_ONESHOT},
 };
+// clang-format on
 
 static const struct {
     uint16_t  kc;
@@ -134,9 +136,9 @@ static uint16_t inner_keycode(uint16_t kc, const keyrecord_t *record) {
 
 static void ctx_init(key_ctx_t *ctx, uint16_t keycode, keyrecord_t *record) {
     memset(ctx, 0, sizeof(*ctx));
-    ctx->keycode   = keycode;
-    ctx->inner     = inner_keycode(keycode, record);
-    ctx->pressed   = record->event.pressed;
+    ctx->keycode = keycode;
+    ctx->inner   = inner_keycode(keycode, record);
+    ctx->pressed = record->event.pressed;
     /* A gesture tap counts as a tap dance TAP would: a hold key mapped to a
      * gesture cell arms its oneshot. */
     ctx->magic = (record->event.key.row == VIAL_MATRIX_MAGIC && record->event.key.col == VIAL_MATRIX_MAGIC) ||

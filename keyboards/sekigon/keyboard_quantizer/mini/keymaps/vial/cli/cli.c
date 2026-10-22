@@ -30,7 +30,9 @@ void virtser_recv(uint8_t c) {
     }
 }
 
-static void writeChar(EmbeddedCli *_, char c) { printf("%c", c); }
+static void writeChar(EmbeddedCli *_, char c) {
+    printf("%c", c);
+}
 
 static void onVersion(EmbeddedCli *cli, char *args, void *context) {
     (void)cli;
@@ -222,9 +224,8 @@ static void print_descriptors(void) {
 static void print_hid_stats(void) {
     hid_input_stats_t s = hid_input_stats();
     hidq_stats_t      q = hidq_stats();
-    printf("kb %u  mouse %u  consumer %u last=0x%04X  system %u last=0x%04X\n", (unsigned)s.keyboard,
-           (unsigned)s.mouse, (unsigned)s.consumer, (unsigned)s.last_consumer, (unsigned)s.system,
-           (unsigned)s.last_system);
+    printf("kb %u  mouse %u  consumer %u last=0x%04X  system %u last=0x%04X\n", (unsigned)s.keyboard, (unsigned)s.mouse,
+           (unsigned)s.consumer, (unsigned)s.last_consumer, (unsigned)s.system, (unsigned)s.last_system);
     printf("other %u last page=0x%04X  buttons 0x%04X  undefined 0x%04X  unknown %u\n", (unsigned)s.other,
            (unsigned)s.last_other_page, (unsigned)s.last_buttons, (unsigned)s.last_undefined,
            (unsigned)s.unknown_reports);
@@ -259,11 +260,11 @@ void cli_init(void) {
     config->enableAutoComplete = false;
     config->historyBufferSize  = 64;
     config->maxBindingCount    = 16;
-    cli = embeddedCliNew(config);
+    cli                        = embeddedCliNew(config);
     if (cli == NULL) {
         return;
     }
-    cli->writeChar = writeChar;
+    cli->writeChar                            = writeChar;
     static const CliCommandBinding commands[] = {
         {"version", "Show version", false, NULL, onVersion},
         {"piousb", "Pio usb status", false, NULL, onPioUsbStatus},

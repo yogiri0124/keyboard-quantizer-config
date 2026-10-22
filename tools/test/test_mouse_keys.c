@@ -67,10 +67,10 @@ void wait_ms(uint32_t ms) {
 }
 
 static vial_tap_dance_entry_t tap_dances[4] = {
-    {U_OSCR, KC_NO, KC_NO, KC_NO, 200},       /* TD(0): TAP is a oneshot key */
-    {KC_A, KC_NO, KC_NO, KC_NO, 200},         /* TD(1): TAP is a letter */
-    {KC_MS_BTN1, KC_NO, KC_NO, KC_NO, 200},   /* TD(2): TAP is a click */
-    {KC_NO, MO(1), KC_NO, KC_NO, 200},        /* TD(3): only a layer HOLD */
+    {U_OSCR, KC_NO, KC_NO, KC_NO, 200},     /* TD(0): TAP is a oneshot key */
+    {KC_A, KC_NO, KC_NO, KC_NO, 200},       /* TD(1): TAP is a letter */
+    {KC_MS_BTN1, KC_NO, KC_NO, KC_NO, 200}, /* TD(2): TAP is a click */
+    {KC_NO, MO(1), KC_NO, KC_NO, 200},      /* TD(3): only a layer HOLD */
 };
 int dynamic_keymap_get_tap_dance(uint8_t index, vial_tap_dance_entry_t *entry) {
     if (index >= 4) {
@@ -85,8 +85,8 @@ int dynamic_keymap_get_tap_dance(uint8_t index, vial_tap_dance_entry_t *entry) {
 enum { PHYS, MAGIC, GESTURE_CELL, WHEEL_CELL, COMBO };
 
 static bool event(uint16_t kc, bool pressed, int source, uint8_t tap_count) {
-    keyrecord_t r = {0};
-    r.event.type  = source == COMBO ? COMBO_EVENT : KEY_EVENT;
+    keyrecord_t r   = {0};
+    r.event.type    = source == COMBO ? COMBO_EVENT : KEY_EVENT;
     r.event.pressed = pressed;
     switch (source) {
         case MAGIC:
@@ -119,7 +119,7 @@ static void fresh(void) {
     modes_reset();
     modes_new_pass();
     osl_cleared = osm_cleared = steps = 0;
-    injecting   = false;
+    injecting                         = false;
 }
 
 /* ---- oneshots ---- */

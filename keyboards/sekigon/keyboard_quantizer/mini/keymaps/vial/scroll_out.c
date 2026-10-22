@@ -12,9 +12,9 @@
 
 enum { AXIS_V = 0, AXIS_H = 1 };
 
-static int32_t queue[2];    /* waiting to be sent */
-static int32_t urgent[2];   /* modifier held: sent first, on its own */
-static int32_t ball_rem[2]; /* ball counts x QUEUE_PER_DETENT not yet a unit, */
+static int32_t queue[2];     /* waiting to be sent */
+static int32_t urgent[2];    /* modifier held: sent first, on its own */
+static int32_t ball_rem[2];  /* ball counts x QUEUE_PER_DETENT not yet a unit, */
 static int32_t ball_div = 1; /* ... as a remainder of this divisor */
 
 /* Far more than a hand can scroll before the next report; it only keeps

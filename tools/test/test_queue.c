@@ -8,7 +8,7 @@
 
 /* A test can make "core1" run at the n-th barrier core0 passes, to land a
  * push between two steps of a pop. */
-static int  barrier_countdown = -1;
+static int barrier_countdown = -1;
 static void (*barrier_hook)(void);
 
 void hidq_barrier(void) {
@@ -42,7 +42,8 @@ static void test_order(void) {
     push_tagged(16, 2, 3);
     hidq_push_unmount(17);
     hidq_event_t ev;
-    CHECK(hidq_pop(&ev) && ev.type == HIDQ_MOUNT && ev.interface == 17 && ev.len == 200 && ev.data[199] == 0xAB, "mount");
+    CHECK(hidq_pop(&ev) && ev.type == HIDQ_MOUNT && ev.interface == 17 && ev.len == 200 && ev.data[199] == 0xAB,
+          "mount");
     CHECK(hidq_pop(&ev) && ev.type == HIDQ_REPORT && ev.interface == 17 && tag_of(&ev) == 1 && ev.len == 8, "report 1");
     CHECK(hidq_pop(&ev) && ev.type == HIDQ_REPORT && ev.interface == 16 && tag_of(&ev) == 2 && ev.len == 3, "report 2");
     CHECK(hidq_pop(&ev) && ev.type == HIDQ_UNMOUNT && ev.interface == 17, "unmount");

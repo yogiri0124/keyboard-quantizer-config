@@ -10,6 +10,7 @@
 //
 // Perform as a JP keyboard on US systems
 //
+// clang-format off
 static const key_override_t *jp_key_on_us_os_overrides[] = {
     w_shift(KC_2, KC_DQT),
     w_shift(KC_6, KC_AMPR),
@@ -34,6 +35,7 @@ static const key_override_t *jp_key_on_us_os_overrides[] = {
     wo_shift(KC_INT1, KC_BSLS),
     w_shift(KC_INT1, KC_UNDS),
 };
+// clang-format on
 
 _Static_assert(OS_OVERRIDE_LEN(jp_key_on_us_os_overrides) + 1 <= OS_KEY_OVERRIDE_ENTRIES,
                "JP-on-US OS overrides exceed OS_KEY_OVERRIDE_ENTRIES");

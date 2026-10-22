@@ -23,8 +23,8 @@ typedef struct {
     uint16_t buttons;     /* bit n = button n+1 */
     int16_t  x;
     int16_t  y;
-    int16_t  wheel; /* positive = up */
-    int16_t  pan;   /* AC Pan as the device sends it */
+    int16_t  wheel;     /* positive = up */
+    int16_t  pan;       /* AC Pan as the device sends it */
     uint16_t undefined; /* bits of fields nothing here understands (CLI diagnostics) */
 } hid_mouse_t;
 

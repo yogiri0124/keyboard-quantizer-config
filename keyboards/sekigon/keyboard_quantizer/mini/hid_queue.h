@@ -24,7 +24,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define HIDQ_RING_BYTES 16384u /* power of two */
+#define HIDQ_RING_BYTES 16384u   /* power of two */
 #define HIDQ_RESERVE_BYTES 4096u /* kept free for mount / unmount */
 #define HIDQ_SLOTS 16            /* reports (interface + Report ID) that can hold an overflow report */
 #define HIDQ_REPORT_MAX 64

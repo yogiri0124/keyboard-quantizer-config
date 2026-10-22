@@ -37,7 +37,7 @@ uint8_t              layer_switch_get_layer(keypos_t key);
 uint16_t             keymap_key_to_keycode(uint8_t layer, keypos_t key);
 
 /* quantum/action_util.h, keycode_config.h */
-#define MOD_BIT(code) (1 << ((code)&0x07))
+#define MOD_BIT(code) (1 << ((code) & 0x07))
 void     register_mods(uint8_t mods);
 void     unregister_mods(uint8_t mods);
 uint16_t keycode_config(uint16_t keycode);

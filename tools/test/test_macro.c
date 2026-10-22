@@ -48,7 +48,7 @@ void vial_keycode_up(uint16_t kc) {
     log_event("up(%04X)", kc, 0);
 }
 static unsigned waited;
-void wait_ms(uint32_t ms) {
+void            wait_ms(uint32_t ms) {
     waited += ms;
 }
 
@@ -65,8 +65,8 @@ int main(void) {
      * 0x0100 (sent as 0xFF01), Vial delay 300 ms, VIA delay "1500|", then
      * "b". Macro 1: down / up of 0x04. */
     static const uint8_t two[] = {
-        'a', 1, 1, 0x04, 1, 5, 0x06, 0x01, 1, 5, 0x01, 0xFF, 1, 4, 300 % 255 + 1, 300 / 255 + 1,
-        1,   4, '1', '5', '0', '0', '|', 'b', 0,  1, 2, 0x04, 1, 3, 0x04, 0,
+        'a', 1, 1,   0x04, 1,   5,   0x06, 0x01, 1, 5, 0x01, 0xFF, 1, 4, 300 % 255 + 1, 300 / 255 + 1,
+        1,   4, '1', '5',  '0', '0', '|',  'b',  0, 1, 2,    0x04, 1, 3, 0x04,          0,
     };
     load(two, sizeof two);
     dynamic_keymap_macro_send(0);

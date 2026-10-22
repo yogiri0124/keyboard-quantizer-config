@@ -86,14 +86,14 @@ static bool interface_uses_ids(uint8_t interface) {
 }
 
 static void set_uses_ids(uint8_t interface, bool on) {
-    uint8_t bit = (uint8_t)(1u << (interface % 8));
+    uint8_t bit             = (uint8_t)(1u << (interface % 8));
     uses_ids[interface / 8] = on ? (uint8_t)(uses_ids[interface / 8] | bit) : (uint8_t)(uses_ids[interface / 8] & ~bit);
 }
 
 /* One slot per report (interface and Report ID): each report carries its
  * own state, so a newer mouse report must not replace a consumer release. */
 static slot_t *slot_for(uint8_t interface, uint8_t report_id) {
-    slot_t *spare = NULL;
+    slot_t *spare  = NULL;
     slot_t *oldest = &slots[0];
     for (uint8_t i = 0; i < HIDQ_SLOTS; i++) {
         slot_t *s = &slots[i];

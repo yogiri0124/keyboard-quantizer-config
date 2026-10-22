@@ -17,9 +17,10 @@
 #define DIAG_256 181
 
 static const int16_t centre[GESTURE_DIR_COUNT] = {
-    [GESTURE_RIGHT] = 0,          [GESTURE_LEFT] = HALF_TURN,       [GESTURE_UP] = QUARTER_TURN,
-    [GESTURE_DOWN] = 3 * QUARTER_TURN, [GESTURE_UP_RIGHT] = 512,    [GESTURE_UP_LEFT] = 1536,
-    [GESTURE_DOWN_RIGHT] = 3584,  [GESTURE_DOWN_LEFT] = 2560,
+    [GESTURE_RIGHT] = 0,         [GESTURE_LEFT] = HALF_TURN,
+    [GESTURE_UP] = QUARTER_TURN, [GESTURE_DOWN] = 3 * QUARTER_TURN,
+    [GESTURE_UP_RIGHT] = 512,    [GESTURE_UP_LEFT] = 1536,
+    [GESTURE_DOWN_RIGHT] = 3584, [GESTURE_DOWN_LEFT] = 2560,
 };
 
 static int32_t abs32(int32_t v) {
@@ -35,7 +36,7 @@ static int32_t octant_angle(int32_t num, int32_t den) {
 
 static int32_t angle_of(int32_t x, int32_t y_up) {
     int32_t ax = abs32(x), ay = abs32(y_up);
-    int32_t a  = ax >= ay ? octant_angle(ay, ax) : QUARTER_TURN - octant_angle(ax, ay);
+    int32_t a = ax >= ay ? octant_angle(ay, ax) : QUARTER_TURN - octant_angle(ax, ay);
     if (x >= 0 && y_up >= 0) {
         return a;
     }
