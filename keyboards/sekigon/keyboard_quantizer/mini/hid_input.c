@@ -233,7 +233,7 @@ static bool handle_report(uint8_t interface, const uint8_t *data, uint8_t len) {
             }
             sync_host_usages();
             break;
-        default:
+        case HID_KIND_OTHER:
             stats.other++;
             stats.last_other_page = d.collection_page;
             kq_vendor_report(d.collection_page, d.payload, d.payload_len);

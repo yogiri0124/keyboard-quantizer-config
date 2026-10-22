@@ -102,9 +102,10 @@ static int32_t along(gesture_dir_t d, int32_t dx, int32_t dy) {
             return (dx + dy) * DIAG_256;
         case GESTURE_DOWN_LEFT:
             return (-dx + dy) * DIAG_256;
-        default:
-            return 0;
+        case GESTURE_NONE:
+            break;
     }
+    return 0;
 }
 
 /* Length of (x, y) to within 7%: max + 3/8 min. */

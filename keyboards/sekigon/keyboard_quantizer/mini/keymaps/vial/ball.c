@@ -130,9 +130,10 @@ char ball_mode_letter(void) {
             return 's';
         case BALL_GESTURE:
             return 'g';
-        default:
-            return 'c';
+        case BALL_CURSOR:
+            break;
     }
+    return 'c';
 }
 
 /* ------------------------------------------------------------ gesture */
@@ -196,7 +197,7 @@ void kq_mouse_report(const hid_mouse_t *m) {
             fire_gesture(gesture_move(&gesture, &cfg, m->x, m->y, timer_read()));
             break;
         }
-        default: {
+        case BALL_CURSOR: {
             int32_t x, y;
             pointer_move(&pointer, m->x, m->y, settings_get(SETTING_CURSOR_SCALE), modes_active(KQ_MODE_SLOW), &x, &y);
             mouse_add_motion(x, y);

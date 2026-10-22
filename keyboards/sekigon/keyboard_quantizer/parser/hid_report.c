@@ -227,7 +227,8 @@ bool hid_report_decode(uint8_t interface, const uint8_t *data, uint8_t len, hid_
         case HID_KIND_SYSTEM:
             decode_usages(dev, ri, PAGE_GENERIC_DESKTOP, data, len, &out->usages);
             return true;
-        default:
-            return true;
+        case HID_KIND_OTHER:
+            return true; /* the caller gets the payload */
     }
+    return false;
 }
