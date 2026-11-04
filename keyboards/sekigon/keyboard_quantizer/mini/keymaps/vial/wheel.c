@@ -93,8 +93,9 @@ static void wait_mouse_endpoint_idle(void) {
  * sent: the caller already put scrolling on the wire. */
 static void send_urgent(bool sent) {
     for (uint16_t i = 0; i < URGENT_MAX_REPORTS && scroll_out_urgent_pending(); i++) {
-        report_mouse_t r = {0};
-        scroll_out_take_urgent(&r.v, &r.h);
+        scroll_count_t v, h; /* report_mouse_t is packed: no pointers into it */
+        scroll_out_take_urgent(&v, &h);
+        report_mouse_t r = {.v = v, .h = h};
         mouse_send_direct(&r);
         sent = true;
     }
@@ -250,8 +251,9 @@ void mousekey_host_send(report_mouse_t *report) {
     }
     scroll_out_detents(report->v, true, true);
     scroll_out_detents(report->h, false, true);
-    report_mouse_t r = {.x = report->x, .y = report->y};
-    scroll_out_take_urgent(&r.v, &r.h);
+    scroll_count_t v, h;
+    scroll_out_take_urgent(&v, &h);
+    report_mouse_t r = {.x = report->x, .y = report->y, .v = v, .h = h};
     mouse_send_direct(&r);
     send_urgent(r.v != 0 || r.h != 0);
     mouse_request_send();

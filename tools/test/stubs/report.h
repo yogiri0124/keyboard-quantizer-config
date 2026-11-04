@@ -16,4 +16,4 @@ typedef struct {
     int8_t v;
     int8_t h;
 #endif
-} report_mouse_t;
+} __attribute__((packed)) report_mouse_t; /* as QMK's: no pointers into it */

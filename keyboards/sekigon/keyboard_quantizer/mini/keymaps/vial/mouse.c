@@ -71,7 +71,10 @@ static bool send_report(void) {
     r.buttons        = current_buttons();
     r.x              = take_axis(&pending_x);
     r.y              = take_axis(&pending_y);
-    scroll_out_take(timer_read(), &r.v, &r.h);
+    scroll_count_t v, h; /* r is packed: no pointers into it */
+    scroll_out_take(timer_read(), &v, &h);
+    r.v = v;
+    r.h = h;
     send_wanted  = pending_x != 0 || pending_y != 0 || scroll_out_pending();
     bool changed = r.buttons != sent_buttons || r.x != 0 || r.y != 0 || r.v != 0 || r.h != 0;
     if (changed) {
