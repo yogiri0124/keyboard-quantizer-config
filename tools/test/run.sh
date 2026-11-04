@@ -37,9 +37,9 @@ run mouse_core_8bit -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 "$root/tools/test/te
 
 run macro -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' "$root/tools/test/test_macro.c" "$vial/macro.c"
 
-run mouse_keys -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DVIAL_ENABLE -DTAP_DANCE_ENABLE "$root/tools/test/test_mouse_keys.c" "$vial/mouse_keys.c" "$vial/modes.c" "$vial/switcher.c"
+run mouse_keys -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DVIAL_ENABLE -DTAP_DANCE_ENABLE "$root/tools/test/test_mouse_keys.c" "$vial/mouse_keys.c" "$vial/modes.c" "$vial/switcher.c" "$vial/layer_lock.c"
 
-run settings_locks -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DMOUSEKEY_ENABLE -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 -DWHEEL_EXTENDED_REPORT "$root/tools/test/test_settings_locks.c" "$vial/settings.c" "$vial/locks.c" "$vial/mouse.c" "$vial/modes.c" "$vial/scroll_out.c" "$vial/switcher.c"
+run settings_locks -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DMOUSEKEY_ENABLE -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 -DWHEEL_EXTENDED_REPORT "$root/tools/test/test_settings_locks.c" "$vial/settings.c" "$vial/locks.c" "$vial/mouse.c" "$vial/modes.c" "$vial/scroll_out.c" "$vial/switcher.c" "$vial/layer_lock.c"
 
 run host -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' "$root/tools/test/test_host.c" "$kq/mini/hid_host.c" "$kq/mini/hid_queue.c" "$kq/mini/hid_scan.c"
 

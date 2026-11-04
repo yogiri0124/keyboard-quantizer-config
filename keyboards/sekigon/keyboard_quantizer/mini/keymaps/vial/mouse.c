@@ -19,6 +19,7 @@
 #include "scroll_out.h"
 #include "settings.h"
 #include "switcher.h"
+#include "layer_lock.h"
 #include "wheel.h"
 
 _Static_assert(sizeof(((report_mouse_t *)0)->v) == sizeof(scroll_count_t), "scroll_out matches the report's wheel field");
@@ -143,6 +144,7 @@ void mouse_reset_latches(void) {
     modes_reset();
     locks_clear();
     switcher_clear();
+    layer_lock_clear();
     wheel_reset();
     scroll_out_reset();
     ball_reset();

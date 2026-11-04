@@ -54,6 +54,7 @@ enum {
     QK_KB_0                 = 0x7E00,
     QK_KB_25                = 0x7E19,
     QK_KB_27                = 0x7E1B,
+    QK_KB_28                = 0x7E1C,
 };
 
 #define IS_MOUSEKEY_BUTTON(code) (KC_MS_BTN1 <= (code) && (code) <= KC_MS_BTN8)
@@ -63,6 +64,9 @@ enum {
 #define IS_QK_MOD_TAP(code) ((code) >= QK_MOD_TAP && (code) <= QK_MOD_TAP_MAX)
 #define IS_QK_LAYER_TAP(code) ((code) >= QK_LAYER_TAP && (code) <= QK_LAYER_TAP_MAX)
 #define IS_QK_LAYER_MOD(code) ((code) >= QK_LAYER_MOD && (code) <= QK_LAYER_MOD_MAX)
+#define QK_TOGGLE_LAYER_GET_LAYER(kc) ((kc)&0x1F)
+#define TO(layer) (QK_TO | (layer))
+#define TG(layer) (QK_TOGGLE_LAYER | (layer))
 #define IS_QK_TO(code) ((code) >= QK_TO && (code) <= QK_TO_MAX)
 #define IS_QK_MOMENTARY(code) ((code) >= QK_MOMENTARY && (code) <= QK_MOMENTARY_MAX)
 #define IS_QK_DEF_LAYER(code) ((code) >= QK_DEF_LAYER && (code) <= QK_DEF_LAYER_MAX)

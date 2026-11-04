@@ -24,6 +24,7 @@
 #include "mouse.h"
 #include "settings.h"
 #include "switcher.h"
+#include "layer_lock.h"
 #include "wheel.h"
 #include "identity.h"
 
@@ -107,7 +108,7 @@ static bool is_settings_key(uint16_t kc) {
 }
 
 static bool is_layer_key(uint16_t kc) {
-    return IS_QK_MOMENTARY(kc) || IS_QK_TO(kc) || IS_QK_TOGGLE_LAYER(kc) || IS_QK_LAYER_TAP_TOGGLE(kc) ||
+    return kc == U_LLOCK || IS_QK_MOMENTARY(kc) || IS_QK_TO(kc) || IS_QK_TOGGLE_LAYER(kc) || IS_QK_LAYER_TAP_TOGGLE(kc) ||
            IS_QK_DEF_LAYER(kc) || IS_QK_LAYER_MOD(kc) || IS_QK_ONE_SHOT_LAYER(kc);
 }
 
@@ -302,7 +303,7 @@ bool process_record_mouse(uint16_t keycode, keyrecord_t *record) {
 
     /* Before the key acts: with Alt still down, a click or Enter would
      * reach the switcher, not the chosen window. */
-    if (switcher_process_key(keycode, ctx.pressed)) {
+    if (switcher_process_key(keycode, ctx.pressed) || layer_lock_process_key(keycode, ctx.pressed)) {
         end_qmk_oneshots(&ctx);
         return false;
     }

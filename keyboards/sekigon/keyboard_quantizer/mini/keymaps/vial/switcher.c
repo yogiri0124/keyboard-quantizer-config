@@ -5,6 +5,7 @@
 
 #include "switcher.h"
 #include "kq_keycodes.h"
+#include "layer_lock.h"
 
 #define ALT MOD_BIT(KC_LALT)
 
@@ -36,7 +37,8 @@ bool switcher_process_key(uint16_t keycode, bool pressed) {
     /* Alt held by someone else (A.LCK, the Alt key) stays theirs. */
     if (!active && !(get_mods() & (ALT | MOD_BIT(KC_RALT)))) {
         active = true;
-        layers = layer_state;
+        /* A locked layer does not go off: as if no layer were held. */
+        layers = layer_state & ~layer_lock_locked();
         register_mods(ALT);
     }
     last_press = timer_read32();

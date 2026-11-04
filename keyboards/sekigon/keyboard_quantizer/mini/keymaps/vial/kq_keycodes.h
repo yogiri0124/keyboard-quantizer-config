@@ -45,6 +45,8 @@ enum {
     /* 26-27 Window switching: Alt+Tab / Alt+Shift+Tab, Alt kept down */
     U_ALT_TAB,
     U_ALT_STAB,
+    /* 28 Layer Lock: keep the top layer on / let it go */
+    U_LLOCK,
 };
 
-_Static_assert((int)U_ALT_STAB == (int)QK_KB_27, "vial.json customKeycodes order must match QK_KB_0..27");
+_Static_assert((int)U_LLOCK == (int)QK_KB_28, "vial.json customKeycodes order must match QK_KB_0..28");

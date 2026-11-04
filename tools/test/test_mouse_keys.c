@@ -15,6 +15,7 @@
 #include "mouse_keys.h"
 #include "settings.h"
 #include "switcher.h"
+#include "layer_lock.h"
 
 /* ---- stand-ins for the rest of the keymap ---- */
 
@@ -73,6 +74,21 @@ static uint32_t now = 5000;
 static uint16_t sent_taps[8];
 static int      n_taps;
 layer_state_t   layer_state;
+/* QMK's layer_state_set, through the hook. */
+static void set_layers(layer_state_t s) {
+    layer_state = layer_state_set_user(s);
+}
+void layer_and(layer_state_t s) {
+    set_layers(layer_state & s);
+}
+uint8_t get_highest_layer(layer_state_t s) {
+    for (int l = 31; l > 0; l--) {
+        if ((s >> l) & 1) {
+            return (uint8_t)l;
+        }
+    }
+    return 0;
+}
 uint8_t         get_mods(void) {
     return mods;
 }
@@ -148,6 +164,7 @@ static void tap(uint16_t kc, int source) {
 
 static void fresh(void) {
     switcher_clear();
+    layer_lock_clear();
     mods        = 0;
     layer_state = 0;
     n_taps      = 0;
@@ -362,6 +379,62 @@ static void test_switcher(void) {
     CHECK(mods == 0 && !switcher_active(), "clear left Alt down");
 }
 
+/* ---- layer lock ---- */
+
+static void test_layer_lock(void) {
+    fresh();
+    /* Nothing above layer 0: nothing to lock. */
+    tap(U_LLOCK, PHYS);
+    CHECK(layer_lock_locked() == 0, "locked layer 0");
+    /* Hold the layer 2 key, lock, let go: layer 2 stays. */
+    set_layers(1u << 2);
+    tap(U_LLOCK, GESTURE_CELL);
+    set_layers(layer_state & ~(1u << 2)); /* the hold key's release */
+    CHECK(layer_state == 1u << 2, "layer went off: 0x%lx", (unsigned long)layer_state);
+    /* Another layer on top and off again: 2 is still there. */
+    set_layers(layer_state | 1u << 3);
+    set_layers(layer_state & ~(1u << 3));
+    CHECK(layer_state == 1u << 2, "layer 2 lost with layer 3");
+    /* Gestures switching windows on the locked layer: a pause ends it, as
+     * with no layer held. */
+    tap(U_ALT_TAB, GESTURE_CELL);
+    CHECK(switcher_active(), "no switch");
+    now += SWITCHER_TIMEOUT_MS;
+    switcher_task();
+    CHECK(!switcher_active() && mods == 0, "Alt stuck on a locked layer");
+    /* L.LCK again on the locked layer: unlocked and off. */
+    tap(U_LLOCK, GESTURE_CELL);
+    CHECK(layer_state == 0 && layer_lock_locked() == 0, "not unlocked: 0x%lx", (unsigned long)layer_state);
+    /* With layer 3 held over locked 2, L.LCK locks 3 as well. */
+    set_layers(1u << 2);
+    tap(U_LLOCK, PHYS);
+    set_layers(layer_state | 1u << 3);
+    tap(U_LLOCK, PHYS);
+    set_layers(layer_state & ~(1u << 3));
+    CHECK(layer_lock_locked() == ((1u << 2) | (1u << 3)) && layer_state == ((1u << 2) | (1u << 3)), "two locks");
+    /* TG of a locked layer turns it off (QMK inverts it after us). */
+    event(TG(3), true, PHYS, 0);
+    set_layers(layer_state ^ (1u << 3));
+    event(TG(3), false, PHYS, 0);
+    CHECK(layer_state == 1u << 2, "TG kept the lock: 0x%lx", (unsigned long)layer_state);
+    /* TO leaves only its layer. */
+    event(TO(1), true, PHYS, 0);
+    set_layers(1u << 1);
+    CHECK(layer_state == 1u << 1 && layer_lock_locked() == 0, "TO kept the lock");
+    /* CLR / RST / unplug: locked layers go off. */
+    set_layers(1u << 2);
+    tap(U_LLOCK, PHYS);
+    layer_lock_clear();
+    CHECK(layer_state == 0 && layer_lock_locked() == 0, "clear kept the lock");
+    /* L.LCK is not "the next key" of a oneshot mode. */
+    modes_oneshot_key(KQ_MODE_SCROLL, true);
+    modes_oneshot_key(KQ_MODE_SCROLL, false);
+    set_layers(1u << 2);
+    tap(U_LLOCK, PHYS);
+    CHECK(modes_active(KQ_MODE_SCROLL), "L.LCK ended O.SCR");
+    fresh();
+}
+
 int main(void) {
     test_oneshot_ends();
     test_oneshot_survives();
@@ -369,5 +442,6 @@ int main(void) {
     test_magic_latches();
     test_qmk_oneshots();
     test_switcher();
+    test_layer_lock();
     return check_done("mouse keys");
 }

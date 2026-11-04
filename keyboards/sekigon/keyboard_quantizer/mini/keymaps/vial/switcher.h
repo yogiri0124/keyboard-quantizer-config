@@ -7,8 +7,9 @@
  * Alt goes up, choosing the window, when a layer that was on at the first
  * press goes off (the hold key that brought the layer is let go), on any
  * other key press, or, when no layer was on, SWITCHER_TIMEOUT_MS after the
- * last press. With Alt already down (A.LCK, the Alt key) the keys only tap
- * and leave Alt alone. */
+ * last press (a layer kept on by L.LCK counts as none: it does not go off).
+ * With Alt already down (A.LCK, the Alt key) the keys only tap and leave
+ * Alt alone. */
 
 #pragma once
 

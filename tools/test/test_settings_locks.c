@@ -52,6 +52,17 @@ uint8_t get_mods(void) {
 }
 /* Alt and GUI swapped when keymap_config says so, as QMK's Magic swap. */
 layer_state_t layer_state;
+void          layer_and(layer_state_t s) {
+    layer_state = layer_state_set_user(layer_state & s);
+}
+uint8_t get_highest_layer(layer_state_t s) {
+    for (int l = 31; l > 0; l--) {
+        if ((s >> l) & 1) {
+            return (uint8_t)l;
+        }
+    }
+    return 0;
+}
 void          tap_code16(uint16_t kc) {
     (void)kc;
 }

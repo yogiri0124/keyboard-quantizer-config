@@ -14,7 +14,7 @@ OPT_DEFS += -DWHEEL_EXTENDED_REPORT
 SRC += hid_queue.c hid_scan.c hid_input.c hid_host.c
 
 # Keymap side.
-SRC += mouse.c ball.c mouse_keys.c modes.c locks.c pointer.c gesture.c wheel.c scroll_out.c switcher.c
+SRC += mouse.c ball.c mouse_keys.c modes.c locks.c pointer.c gesture.c wheel.c scroll_out.c switcher.c layer_lock.c
 SRC += settings.c default_config.c macro.c raw_hid.c
 SRC += cli.c
 SRC += os_key_override.c jp_key_on_us_os_override.c us_key_on_jp_os_override.c

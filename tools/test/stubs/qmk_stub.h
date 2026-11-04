@@ -33,6 +33,8 @@ typedef uint32_t     layer_state_t;
 extern layer_state_t layer_state;
 extern layer_state_t default_layer_state;
 uint8_t              get_highest_layer(layer_state_t state);
+void                 layer_and(layer_state_t state);
+layer_state_t        layer_state_set_user(layer_state_t state);
 uint8_t              layer_switch_get_layer(keypos_t key);
 uint16_t             keymap_key_to_keycode(uint8_t layer, keypos_t key);
 

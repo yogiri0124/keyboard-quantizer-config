@@ -150,6 +150,11 @@
       "name": "ALT_SHIFT_TAB",
       "title": "Alt+Shift+Tab（前のウィンドウ）。A.TABと同じく、Altは押したままになる",
       "shortName": "A.STAB"
+    },
+    {
+      "name": "LAYER_LOCK",
+      "title": "レイヤーロック。押したときに使っているいちばん上のレイヤーを、レイヤーキーを離しても切れないようにする。そのレイヤーでもう一度押すと解除。TO/TGやCLRでも解除される",
+      "shortName": "L.LCK"
     }
   ],
   "menus": [
