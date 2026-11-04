@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="518" viewBox="0 0 760 518" font-family="'Yu Gothic UI','Hiragino Sans','Noto Sans CJK JP',sans-serif">
+<title>HUGE PLUS レイアウトのマス番号（行,列）</title>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<rect x="95" y="23" width="66" height="66" rx="5" fill="#E6F1FB" stroke="#185FA5"/>
+<text x="128" y="47" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#042C53">28,1</text>
+<text x="128" y="67" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#042C53">ホイール上</text>
+<rect x="419" y="23" width="66" height="66" rx="5" fill="#E1F5EE" stroke="#0F6E56"/>
+<text x="452" y="47" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#04342C">26,5</text>
+<text x="452" y="67" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#04342C">ボール上</text>
+<rect x="599" y="23" width="66" height="210" rx="5" fill="#F1EFE8" stroke="#5F5E5A"/>
+<text x="632" y="119" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#2C2C2A">27,2</text>
+<text x="632" y="139" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#2C2C2A">M2</text>
+<rect x="671" y="23" width="66" height="210" rx="5" fill="#F1EFE8" stroke="#5F5E5A"/>
+<text x="704" y="119" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#2C2C2A">28,0</text>
+<text x="704" y="139" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#2C2C2A">M8</text>
+<rect x="23" y="95" width="66" height="66" rx="5" fill="#E6F1FB" stroke="#185FA5"/>
+<text x="56" y="119" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#042C53">28,3</text>
+<text x="56" y="139" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#042C53">チルト左</text>
+<rect x="95" y="95" width="66" height="66" rx="5" fill="#F1EFE8" stroke="#5F5E5A"/>
+<text x="128" y="119" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#2C2C2A">27,3</text>
+<text x="128" y="139" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#2C2C2A">M3</text>
+<rect x="167" y="95" width="66" height="66" rx="5" fill="#E6F1FB" stroke="#185FA5"/>
+<text x="200" y="119" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#042C53">28,4</text>
+<text x="200" y="139" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#042C53">チルト右</text>
+<rect x="275" y="95" width="66" height="66" rx="5" fill="#F1EFE8" stroke="#5F5E5A"/>
+<text x="308" y="119" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#2C2C2A">27,6</text>
+<text x="308" y="139" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#2C2C2A">M6</text>
+<rect x="347" y="95" width="66" height="66" rx="5" fill="#E1F5EE" stroke="#0F6E56"/>
+<text x="380" y="119" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#04342C">26,7</text>
+<text x="380" y="139" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#04342C">ボール左</text>
+<rect x="491" y="95" width="66" height="66" rx="5" fill="#E1F5EE" stroke="#0F6E56"/>
+<text x="524" y="119" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#04342C">27,0</text>
+<text x="524" y="139" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#04342C">ボール右</text>
+<rect x="95" y="167" width="66" height="66" rx="5" fill="#E6F1FB" stroke="#185FA5"/>
+<text x="128" y="191" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#042C53">28,2</text>
+<text x="128" y="211" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#042C53">ホイール下</text>
+<rect x="275" y="167" width="66" height="66" rx="5" fill="#F1EFE8" stroke="#5F5E5A"/>
+<text x="308" y="191" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#2C2C2A">27,7</text>
+<text x="308" y="211" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#2C2C2A">M7</text>
+<rect x="419" y="167" width="66" height="66" rx="5" fill="#E1F5EE" stroke="#0F6E56"/>
+<text x="452" y="191" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#04342C">26,6</text>
+<text x="452" y="211" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#04342C">ボール下</text>
+<rect x="23" y="257" width="102" height="66" rx="5" fill="#F1EFE8" stroke="#5F5E5A"/>
+<text x="74" y="281" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#2C2C2A">27,5</text>
+<text x="74" y="301" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#2C2C2A">M5</text>
+<rect x="131" y="257" width="102" height="66" rx="5" fill="#F1EFE8" stroke="#5F5E5A"/>
+<text x="182" y="281" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#2C2C2A">27,4</text>
+<text x="182" y="301" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#2C2C2A">M4</text>
+<rect x="347" y="257" width="66" height="66" rx="5" fill="#FAEEDA" stroke="#854F0B"/>
+<text x="380" y="281" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#412402">31,5</text>
+<text x="380" y="301" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#412402">左上</text>
+<rect x="419" y="257" width="66" height="66" rx="5" fill="#FAEEDA" stroke="#854F0B"/>
+<text x="452" y="281" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#412402">31,2</text>
+<text x="452" y="301" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#412402">上</text>
+<rect x="491" y="257" width="66" height="66" rx="5" fill="#FAEEDA" stroke="#854F0B"/>
+<text x="524" y="281" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#412402">31,4</text>
+<text x="524" y="301" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#412402">右上</text>
+<rect x="23" y="329" width="210" height="66" rx="5" fill="#F1EFE8" stroke="#5F5E5A"/>
+<text x="128" y="353" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#2C2C2A">27,1</text>
+<text x="128" y="373" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#2C2C2A">M1（左クリック）</text>
+<rect x="347" y="329" width="66" height="66" rx="5" fill="#FAEEDA" stroke="#854F0B"/>
+<text x="380" y="353" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#412402">31,1</text>
+<text x="380" y="373" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#412402">左</text>
+<rect x="491" y="329" width="66" height="66" rx="5" fill="#FAEEDA" stroke="#854F0B"/>
+<text x="524" y="353" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#412402">31,0</text>
+<text x="524" y="373" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#412402">右</text>
+<rect x="347" y="401" width="66" height="66" rx="5" fill="#FAEEDA" stroke="#854F0B"/>
+<text x="380" y="425" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#412402">31,7</text>
+<text x="380" y="445" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#412402">左下</text>
+<rect x="419" y="401" width="66" height="66" rx="5" fill="#FAEEDA" stroke="#854F0B"/>
+<text x="452" y="425" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#412402">31,3</text>
+<text x="452" y="445" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#412402">下</text>
+<rect x="491" y="401" width="66" height="66" rx="5" fill="#FAEEDA" stroke="#854F0B"/>
+<text x="524" y="425" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" fill="#412402">31,6</text>
+<text x="524" y="445" text-anchor="middle" dominant-baseline="central" font-size="13" fill="#412402">右下</text>
+<rect x="20" y="486" width="16" height="16" rx="3" fill="#F1EFE8" stroke="#5F5E5A"/><text x="44" y="494" dominant-baseline="central" font-size="13" fill="#2C2C2A">ボタン M1〜M8</text>
+<rect x="200" y="486" width="16" height="16" rx="3" fill="#E6F1FB" stroke="#185FA5"/><text x="224" y="494" dominant-baseline="central" font-size="13" fill="#2C2C2A">ホイール・チルト</text>
+<rect x="380" y="486" width="16" height="16" rx="3" fill="#E1F5EE" stroke="#0F6E56"/><text x="404" y="494" dominant-baseline="central" font-size="13" fill="#2C2C2A">ボールの方向</text>
+<rect x="560" y="486" width="16" height="16" rx="3" fill="#FAEEDA" stroke="#854F0B"/><text x="584" y="494" dominant-baseline="central" font-size="13" fill="#2C2C2A">ジェスチャーの方向</text>
+</svg>

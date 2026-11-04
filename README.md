@@ -49,6 +49,8 @@ Vial で Quantizer を開き、Layout を **HUGE PLUS** にすると、HUGE PLUS
 
 HUGE PLUS レイアウトのマスの名前と番号（行,列）。M1〜M8 はマウスのボタン番号。
 
+![HUGE PLUS レイアウトのマス番号](docs/huge_plus_cells.svg)
+
 | 名前 | 番号 | 名前 | 番号 |
 | --- | --- | --- | --- |
 | M1（左クリック） | 27,1 | ホイール上 | 28,1 |
