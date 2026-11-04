@@ -42,6 +42,9 @@ enum {
     U_LGUI_LOCK,
     /* 25 Clear all latches (does not write saved values) */
     U_CLR,
+    /* 26-27 Window switching: Alt+Tab / Alt+Shift+Tab, Alt kept down */
+    U_ALT_TAB,
+    U_ALT_STAB,
 };
 
-_Static_assert((int)U_CLR == (int)QK_KB_25, "vial.json customKeycodes order must match QK_KB_0..25");
+_Static_assert((int)U_ALT_STAB == (int)QK_KB_27, "vial.json customKeycodes order must match QK_KB_0..27");

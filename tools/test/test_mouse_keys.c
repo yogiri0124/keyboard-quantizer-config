@@ -1,6 +1,7 @@
 /* Host tests for the mouse key rules (keymaps/vial/mouse_keys.c with the
- * real modes.c): which key events end O.SCR / O.GES / O.SLO, tap-latched
- * toggles and the S.SCR latch, and when QMK's own oneshots are ended. */
+ * real modes.c and switcher.c): which key events end O.SCR / O.GES / O.SLO,
+ * tap-latched toggles and the S.SCR latch, when QMK's own oneshots are
+ * ended, and window switching (A.TAB / A.STAB). */
 
 #include <string.h>
 
@@ -13,6 +14,7 @@
 #include "modes.h"
 #include "mouse_keys.h"
 #include "settings.h"
+#include "switcher.h"
 
 /* ---- stand-ins for the rest of the keymap ---- */
 
@@ -66,6 +68,35 @@ void wait_ms(uint32_t ms) {
     (void)ms;
 }
 
+static uint8_t  mods;
+static uint32_t now = 5000;
+static uint16_t sent_taps[8];
+static int      n_taps;
+layer_state_t   layer_state;
+uint8_t         get_mods(void) {
+    return mods;
+}
+void register_mods(uint8_t m) {
+    mods |= m;
+}
+void unregister_mods(uint8_t m) {
+    mods &= (uint8_t)~m;
+}
+void tap_code16(uint16_t kc) {
+    /* Alt must already be down when the Tab goes out. */
+    CHECK(mods & MOD_BIT(KC_LALT), "tap 0x%04X without Alt", kc);
+    if (n_taps < 8) {
+        sent_taps[n_taps] = kc;
+    }
+    n_taps++;
+}
+uint32_t timer_read32(void) {
+    return now;
+}
+uint32_t timer_elapsed32(uint32_t last) {
+    return now - last;
+}
+
 static vial_tap_dance_entry_t tap_dances[4] = {
     {U_OSCR, KC_NO, KC_NO, KC_NO, 200},     /* TD(0): TAP is a oneshot key */
     {KC_A, KC_NO, KC_NO, KC_NO, 200},       /* TD(1): TAP is a letter */
@@ -116,6 +147,10 @@ static void tap(uint16_t kc, int source) {
 }
 
 static void fresh(void) {
+    switcher_clear();
+    mods        = 0;
+    layer_state = 0;
+    n_taps      = 0;
     modes_reset();
     modes_new_pass();
     osl_cleared = osm_cleared = steps = 0;
@@ -257,11 +292,82 @@ static void test_qmk_oneshots(void) {
     CHECK_EQ(osl_cleared, 1);
 }
 
+/* ---- window switching ---- */
+
+#define ALT MOD_BIT(KC_LALT)
+
+static void test_switcher(void) {
+    /* Gestures on layer 2 (its hold key down): Alt stays down across the
+     * taps and goes up when the layer does. */
+    fresh();
+    layer_state = 1u << 2;
+    CHECK(!event(U_ALT_TAB, true, GESTURE_CELL, 0), "A.TAB reached QMK");
+    event(U_ALT_TAB, false, GESTURE_CELL, 0);
+    tap(U_ALT_TAB, GESTURE_CELL);
+    tap(U_ALT_STAB, GESTURE_CELL);
+    CHECK(n_taps == 3 && sent_taps[0] == KC_TAB && sent_taps[1] == KC_TAB && sent_taps[2] == S(KC_TAB), "taps: %d",
+          n_taps);
+    CHECK(mods == ALT && switcher_active(), "Alt not held between taps");
+    now += 60000; /* no timeout while the layer is held */
+    switcher_task();
+    CHECK(mods == ALT, "Alt went up with the layer still on");
+    layer_state = 1u << 3; /* another layer on top does not end it... */
+    layer_state |= 1u << 2;
+    switcher_task();
+    CHECK(mods == ALT, "an added layer ended the switch");
+    layer_state = 1u << 3; /* ...layer 2 going off does */
+    switcher_task();
+    CHECK(mods == 0 && !switcher_active(), "Alt still down after the layer went off");
+
+    /* Another key ends it before that key acts. */
+    fresh();
+    layer_state = 1u << 2;
+    tap(U_ALT_TAB, GESTURE_CELL);
+    event(KC_MS_BTN1, true, PHYS, 0);
+    CHECK(mods == 0 && !switcher_active(), "a click did not end the switch");
+    event(KC_MS_BTN1, false, PHYS, 0);
+    fresh();
+    tap(U_ALT_TAB, PHYS);
+    event(U_ALT_TAB, true, PHYS, 0);
+    event(KC_A, false, PHYS, 0); /* a release is not a press */
+    CHECK(mods == ALT, "a key release ended the switch");
+    event(KC_ENTER, true, WHEEL_CELL, 0);
+    CHECK(mods == 0, "an injected key did not end the switch");
+
+    /* No layer on: a pause ends it. */
+    fresh();
+    tap(U_ALT_STAB, PHYS);
+    now += SWITCHER_TIMEOUT_MS - 1;
+    switcher_task();
+    tap(U_ALT_STAB, PHYS); /* each press restarts the wait */
+    now += SWITCHER_TIMEOUT_MS - 1;
+    switcher_task();
+    CHECK(mods == ALT && n_taps == 2, "ended before the timeout");
+    now += 1;
+    switcher_task();
+    CHECK(mods == 0 && !switcher_active(), "no timeout");
+
+    /* Alt already down (A.LCK, the Alt key): only taps, Alt left alone. */
+    fresh();
+    mods = ALT;
+    tap(U_ALT_TAB, PHYS);
+    CHECK(!switcher_active() && n_taps == 1, "took over a held Alt");
+    tap(KC_A, PHYS);
+    CHECK(mods == ALT, "released someone else's Alt");
+
+    /* CLR / unplug. */
+    fresh();
+    tap(U_ALT_TAB, PHYS);
+    switcher_clear();
+    CHECK(mods == 0 && !switcher_active(), "clear left Alt down");
+}
+
 int main(void) {
     test_oneshot_ends();
     test_oneshot_survives();
     test_tap_hold_and_dances();
     test_magic_latches();
     test_qmk_oneshots();
+    test_switcher();
     return check_done("mouse keys");
 }

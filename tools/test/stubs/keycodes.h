@@ -7,11 +7,14 @@ enum {
     KC_TRNS                 = 0x0001,
     KC_A                    = 0x0004,
     KC_B                    = 0x0005,
+    KC_ENTER                = 0x0028,
+    KC_TAB                  = 0x002B,
     KC_LEFT_CTRL            = 0x00E0,
     KC_LCTL                 = 0x00E0,
     KC_LSFT                 = 0x00E1,
     KC_LALT                 = 0x00E2,
     KC_LGUI                 = 0x00E3,
+    KC_RALT                 = 0x00E6,
     KC_RIGHT_GUI            = 0x00E7,
     KC_MS_UP                = 0x00CD,
     KC_MS_DOWN              = 0x00CE,
@@ -50,6 +53,7 @@ enum {
     QK_KB_MAX               = 0x7E3F,
     QK_KB_0                 = 0x7E00,
     QK_KB_25                = 0x7E19,
+    QK_KB_27                = 0x7E1B,
 };
 
 #define IS_MOUSEKEY_BUTTON(code) (KC_MS_BTN1 <= (code) && (code) <= KC_MS_BTN8)
@@ -69,6 +73,7 @@ enum {
 #define QK_LAYER_TAP_GET_TAP_KEYCODE(kc) ((kc) & 0xFF)
 #define QK_MOD_TAP_GET_TAP_KEYCODE(kc) ((kc) & 0xFF)
 
+#define S(kc) (QK_MODS | 0x0200 | (kc))
 #define MO(layer) (QK_MOMENTARY | (layer))
 #define TD(n) (QK_TAP_DANCE | (n))
 #define LT(layer, kc) (QK_LAYER_TAP | ((layer) << 8) | (kc))

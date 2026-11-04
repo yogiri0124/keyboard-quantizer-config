@@ -23,6 +23,7 @@
 #include "modes.h"
 #include "mouse.h"
 #include "settings.h"
+#include "switcher.h"
 #include "wheel.h"
 #include "identity.h"
 
@@ -299,6 +300,12 @@ bool process_record_mouse(uint16_t keycode, keyrecord_t *record) {
 
     end_mode_oneshots(&ctx);
 
+    /* Before the key acts: with Alt still down, a click or Enter would
+     * reach the switcher, not the chosen window. */
+    if (switcher_process_key(keycode, ctx.pressed)) {
+        end_qmk_oneshots(&ctx);
+        return false;
+    }
     bool handled = !wheel_process_record(keycode, record) || locks_process_key(keycode, ctx.pressed);
     if (!handled) {
         locks_note_key(keycode, ctx.pressed);

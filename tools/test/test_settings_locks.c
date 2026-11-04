@@ -14,6 +14,7 @@
 #include "mouse.h"
 #include "scroll_out.h"
 #include "settings.h"
+#include "switcher.h"
 #include "via.h"
 
 /* ---- QMK stand-ins ---- */
@@ -50,6 +51,16 @@ uint8_t get_mods(void) {
     return mods;
 }
 /* Alt and GUI swapped when keymap_config says so, as QMK's Magic swap. */
+layer_state_t layer_state;
+void          tap_code16(uint16_t kc) {
+    (void)kc;
+}
+uint32_t timer_read32(void) {
+    return now;
+}
+uint32_t timer_elapsed32(uint32_t last) {
+    return now - last;
+}
 uint16_t keycode_config(uint16_t kc) {
     if (keymap_config.swap_lalt_lgui) {
         if (kc == KC_LALT) {
@@ -336,6 +347,15 @@ static void test_tap_cell(void) {
     CHECK(n_events == 2 && now == (uint16_t)(t0 + 10), "a zero hold waited");
 }
 
+/* An unplug (mouse_reset_latches) lets go of a window switch's Alt. */
+static void test_switcher_reset(void) {
+    mods = 0;
+    switcher_process_key(U_ALT_TAB, true);
+    CHECK(mods == MOD_BIT(KC_LALT), "A.TAB did not hold Alt");
+    mouse_reset_latches();
+    CHECK(mods == 0 && !switcher_active(), "Alt held after the reset");
+}
+
 int main(void) {
     test_settings_load();
     test_settings_via_and_keys();
@@ -343,5 +363,6 @@ int main(void) {
     test_locks();
     test_mouse_report();
     test_tap_cell();
+    test_switcher_reset();
     return check_done("settings / locks / report");
 }

@@ -140,6 +140,16 @@
       "name": "CLEAR_LOCKS",
       "title": "スクロール/ジェスチャ/スロー/ドラッグロック/修飾ロックを解除。保存した速度やしきい値は触らない",
       "shortName": "CLR"
+    },
+    {
+      "name": "ALT_TAB",
+      "title": "Alt+Tab（次のウィンドウ）。1回目でAltを押したままにし、続けて押すとTabだけ送る。押したときに使っていたレイヤーが切れる（レイヤーキーを離す）、他のキーを押す、レイヤー0なら1秒押さないとAltを離して決定。ジェスチャーのマスに入れると、ボールでウィンドウを選べる",
+      "shortName": "A.TAB"
+    },
+    {
+      "name": "ALT_SHIFT_TAB",
+      "title": "Alt+Shift+Tab（前のウィンドウ）。A.TABと同じく、Altは押したままになる",
+      "shortName": "A.STAB"
     }
   ],
   "menus": [

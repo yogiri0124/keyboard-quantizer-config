@@ -18,6 +18,7 @@
 #include "modes.h"
 #include "scroll_out.h"
 #include "settings.h"
+#include "switcher.h"
 #include "wheel.h"
 
 static bool    send_wanted;
@@ -136,6 +137,7 @@ bool mouse_can_tap(void) {
 void mouse_reset_latches(void) {
     modes_reset();
     locks_clear();
+    switcher_clear();
     wheel_reset();
     scroll_out_reset();
     ball_reset();
@@ -156,6 +158,7 @@ void mouse_init(void) {
 void mouse_housekeeping(void) {
     modes_new_pass();
     locks_task();
+    switcher_task();
     settings_task();
     wheel_task();
     /* The PC may switch the wheel multiplier at any time, which can make a
