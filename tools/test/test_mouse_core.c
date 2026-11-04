@@ -234,11 +234,14 @@ static void test_gesture_diagonal(void) {
 
 /* ---- scroll output ---- */
 
+static uint16_t clock_ms = 1000;
+
 static void take_all(int32_t *v, int32_t *h) {
-    int8_t tv, th;
+    scroll_count_t tv, th;
     *v = *h = 0;
     for (int i = 0; i < 1000 && scroll_out_pending(); i++) {
-        scroll_out_take(&tv, &th);
+        clock_ms += SCROLL_OUT_INTERVAL_MS;
+        scroll_out_take(clock_ms, &tv, &th);
         *v += tv;
         *h += th;
     }
@@ -264,18 +267,76 @@ static void test_scroll_out(void) {
     /* Urgent goes first and alone. */
     scroll_out_detents(1, true, false);
     scroll_out_detents(1, false, true);
-    int8_t tv, th;
+    scroll_count_t tv, th;
     CHECK(scroll_out_urgent_pending(), "urgent missing");
     scroll_out_take_urgent(&tv, &th);
     CHECK(tv == 0 && th == 120, "urgent %d %d", tv, th);
     take_all(&v, &h);
     CHECK(v == 120 && h == 0, "rest %ld %ld", (long)v, (long)h);
-    /* More than one report's worth splits over reports. */
+#if SCROLL_OUT_REPORT_MAX == 127
+    /* More than one 8-bit report's worth splits over reports. */
+    clock_ms += SCROLL_OUT_INTERVAL_MS;
     scroll_out_detents(5, true, false);
-    scroll_out_take(&tv, &th);
+    scroll_out_take(clock_ms, &tv, &th);
     CHECK_EQ(tv, 127);
     take_all(&v, &h);
     CHECK_EQ(v, 600 - 127);
+#else
+    /* A 16-bit report holds it all. */
+    clock_ms += SCROLL_OUT_INTERVAL_MS;
+    scroll_out_detents(5, true, false);
+    scroll_out_take(clock_ms, &tv, &th);
+    CHECK_EQ(tv, 600);
+    CHECK(!scroll_out_pending(), "left over");
+#endif
+}
+
+/* Ordinary scrolling goes out at most once per interval, all that gathered
+ * meanwhile in one report; the first after a pause goes at once; urgent
+ * scrolling is never held back. */
+static void test_scroll_pacing(void) {
+    scroll_count_t tv, th;
+    scroll_out_reset();
+    host_multiplier = 120;
+    uint16_t t      = 5000;
+    scroll_out_ball(0, 32, 32); /* one detent */
+    scroll_out_take(t, &tv, &th);
+    CHECK_EQ(tv, 120);
+    /* A ball report every millisecond: held until the interval is up. */
+    int32_t sent = 0, reports = 0;
+    for (int ms = 1; ms <= 30; ms++) {
+        scroll_out_ball(0, 8, 32); /* a quarter detent */
+        scroll_out_take((uint16_t)(t + ms), &tv, &th);
+        if (tv != 0) {
+            reports++;
+            sent += tv;
+        }
+    }
+    CHECK_EQ(reports, 30 / SCROLL_OUT_INTERVAL_MS);
+    CHECK_EQ(sent, 30 * 30);
+    CHECK(!scroll_out_pending(), "left over");
+    /* Nothing went out during the pause: the next goes at once. */
+    t = (uint16_t)(t + 1000);
+    scroll_out_detents(1, true, false);
+    scroll_out_take(t, &tv, &th);
+    CHECK_EQ(tv, 120);
+    /* Urgent output right behind it is not held back. */
+    scroll_out_detents(1, true, true);
+    scroll_out_take((uint16_t)(t + 1), &tv, &th);
+    CHECK_EQ(tv, 120);
+    /* Nor did it use up the ordinary turn's wait: still paced from t. */
+    scroll_out_detents(1, true, false);
+    scroll_out_take((uint16_t)(t + 1), &tv, &th);
+    CHECK_EQ(tv, 0);
+    CHECK(scroll_out_pending(), "lost");
+    scroll_out_take((uint16_t)(t + SCROLL_OUT_INTERVAL_MS), &tv, &th);
+    CHECK_EQ(tv, 120);
+    /* Reset forgets the last send. */
+    scroll_out_detents(1, true, false);
+    scroll_out_reset();
+    scroll_out_detents(1, true, false);
+    scroll_out_take((uint16_t)(t + SCROLL_OUT_INTERVAL_MS + 1), &tv, &th);
+    CHECK_EQ(tv, 120);
 }
 
 int main(void) {
@@ -286,5 +347,6 @@ int main(void) {
     test_gesture_fast();
     test_gesture_diagonal();
     test_scroll_out();
+    test_scroll_pacing();
     return check_done("mouse core");
 }

@@ -16,6 +16,8 @@ static int32_t queue[2];     /* waiting to be sent */
 static int32_t urgent[2];    /* modifier held: sent first, on its own */
 static int32_t ball_rem[2];  /* ball counts x QUEUE_PER_DETENT not yet a unit, */
 static int32_t ball_div = 1; /* ... as a remainder of this divisor */
+static bool     paced;        /* an ordinary report went out at ... */
+static uint16_t paced_at;     /* ... this time */
 
 /* Far more than a hand can scroll before the next report; it only keeps
  * absurd input from wrapping the sum around. */
@@ -84,26 +86,41 @@ bool scroll_out_urgent_pending(void) {
     return counts(urgent, AXIS_V) != 0 || counts(urgent, AXIS_H) != 0;
 }
 
-static void take_from(int32_t *q, int8_t *v, int8_t *h) {
-    int8_t sent[2];
+/* Moves up to one report's worth per axis; true if any count moved. */
+static bool take_from(int32_t *q, scroll_count_t *v, scroll_count_t *h) {
+    scroll_count_t sent[2];
     for (int a = 0; a < 2; a++) {
         /* One reading of the multiplier for both steps: the host can change
          * it from the USB interrupt at any time. */
         int32_t m = multiplier(a);
         int32_t c = (int32_t)((int64_t)q[a] * m / QUEUE_PER_DETENT);
-        c         = c > 127 ? 127 : (c < -127 ? -127 : c);
+        c         = c > SCROLL_OUT_REPORT_MAX ? SCROLL_OUT_REPORT_MAX : (c < -SCROLL_OUT_REPORT_MAX ? -SCROLL_OUT_REPORT_MAX : c);
         q[a] -= (int32_t)((int64_t)c * QUEUE_PER_DETENT / m);
-        sent[a] = (int8_t)c;
+        sent[a] = (scroll_count_t)c;
     }
     *v = sent[AXIS_V];
     *h = sent[AXIS_H];
+    return sent[AXIS_V] != 0 || sent[AXIS_H] != 0;
 }
 
-void scroll_out_take(int8_t *v, int8_t *h) {
-    take_from(scroll_out_urgent_pending() ? urgent : queue, v, h);
+void scroll_out_take(uint16_t time_ms, scroll_count_t *v, scroll_count_t *h) {
+    if (scroll_out_urgent_pending()) {
+        take_from(urgent, v, h);
+        return;
+    }
+    /* uint16_t wrap: after a pause of a multiple of 65.536 s the first
+     * report can wait up to one interval more. */
+    if (paced && (uint16_t)(time_ms - paced_at) < SCROLL_OUT_INTERVAL_MS) {
+        *v = *h = 0;
+        return;
+    }
+    if (take_from(queue, v, h)) {
+        paced    = true;
+        paced_at = time_ms;
+    }
 }
 
-void scroll_out_take_urgent(int8_t *v, int8_t *h) {
+void scroll_out_take_urgent(scroll_count_t *v, scroll_count_t *h) {
     take_from(urgent, v, h);
 }
 
@@ -111,4 +128,5 @@ void scroll_out_reset(void) {
     memset(queue, 0, sizeof(queue));
     memset(urgent, 0, sizeof(urgent));
     memset(ball_rem, 0, sizeof(ball_rem));
+    paced = false;
 }

@@ -45,6 +45,13 @@ CURRENT = H(
     "c0 c0"
 )
 
+# The same with 16-bit wheel fields (patches/0006, WHEEL_EXTENDED_REPORT):
+# what this firmware sends.
+EXTENDED = CURRENT.replace(H("09 38 15 81 25 7f 95 01 75 08"), H("09 38 16 01 80 26 ff 7f 95 01 75 10")).replace(
+    H("0a 38 02 15 81 25 7f 95 01 75 08"), H("0a 38 02 16 01 80 26 ff 7f 95 01 75 10")
+)
+assert EXTENDED.count(H("26 ff 7f 95 01 75 10")) == 2
+
 # (name, descriptor, expect an error)
 CASES = [
     ("0..255 written as 15 00 25 FF", H("05 01 09 06 a1 01 05 07 19 00 29 ff 15 00 25 ff 95 01 75 08 81 00 c0"), False),
@@ -77,6 +84,7 @@ CASES = [
     ("resolution multiplier", RESMUL, False),
     ("resolution multiplier per wheel (current)", CURRENT, False),
     ("per-wheel multiplier without its padding", CURRENT.replace(H("75 04 b1 01"), b""), True),
+    ("16-bit wheels with their multipliers", EXTENDED, False),
 ]
 
 

@@ -188,10 +188,10 @@ static void scan(void) {
 }
 
 static void take_all(int32_t *v, int32_t *h) {
-    int8_t tv, th;
+    scroll_count_t tv, th;
     *v = *h = 0;
     for (int i = 0; i < 1000 && scroll_out_pending(); i++) {
-        scroll_out_take(&tv, &th);
+        scroll_out_take((uint16_t)(now + i * SCROLL_OUT_INTERVAL_MS), &tv, &th);
         *v += tv;
         *h += th;
     }

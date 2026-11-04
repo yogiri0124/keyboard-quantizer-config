@@ -1,0 +1,136 @@
+diff --git a/quantum/pointing_device/pointing_device.c b/quantum/pointing_device/pointing_device.c
+index 4682ace..9889d88 100644
+--- a/quantum/pointing_device/pointing_device.c
++++ b/quantum/pointing_device/pointing_device.c
+@@ -377,16 +377,16 @@ void pointing_device_set_cpi_on_side(bool left, uint16_t cpi) {
+ }
+ 
+ /**
+- * @brief clamps int16_t to int8_t
++ * @brief clamps int16_t to int8_t, or int32_t to int16_t
+  *
+- * @param[in] int16_t value
+- * @return int8_t clamped value
++ * @param[in] hv_clamp_range_t value
++ * @return mouse_hv_report_t clamped value
+  */
+-static inline int8_t pointing_device_hv_clamp(int16_t value) {
+-    if (value < INT8_MIN) {
+-        return INT8_MIN;
+-    } else if (value > INT8_MAX) {
+-        return INT8_MAX;
++static inline mouse_hv_report_t pointing_device_hv_clamp(hv_clamp_range_t value) {
++    if (value < HV_REPORT_MIN) {
++        return HV_REPORT_MIN;
++    } else if (value > HV_REPORT_MAX) {
++        return HV_REPORT_MAX;
+     } else {
+         return value;
+     }
+@@ -421,8 +421,8 @@ static inline mouse_xy_report_t pointing_device_xy_clamp(clamp_range_t value) {
+ report_mouse_t pointing_device_combine_reports(report_mouse_t left_report, report_mouse_t right_report) {
+     left_report.x = pointing_device_xy_clamp((clamp_range_t)left_report.x + right_report.x);
+     left_report.y = pointing_device_xy_clamp((clamp_range_t)left_report.y + right_report.y);
+-    left_report.h = pointing_device_hv_clamp((int16_t)left_report.h + right_report.h);
+-    left_report.v = pointing_device_hv_clamp((int16_t)left_report.v + right_report.v);
++    left_report.h = pointing_device_hv_clamp((hv_clamp_range_t)left_report.h + right_report.h);
++    left_report.v = pointing_device_hv_clamp((hv_clamp_range_t)left_report.v + right_report.v);
+     left_report.buttons |= right_report.buttons;
+     return left_report;
+ }
+diff --git a/quantum/pointing_device/pointing_device.h b/quantum/pointing_device/pointing_device.h
+index 1cd4b0b..f0be45a 100644
+--- a/quantum/pointing_device/pointing_device.h
++++ b/quantum/pointing_device/pointing_device.h
+@@ -102,6 +102,16 @@ typedef int32_t clamp_range_t;
+ typedef int16_t clamp_range_t;
+ #endif
+ 
++#ifdef WHEEL_EXTENDED_REPORT
++#    define HV_REPORT_MIN INT16_MIN
++#    define HV_REPORT_MAX INT16_MAX
++typedef int32_t hv_clamp_range_t;
++#else
++#    define HV_REPORT_MIN INT8_MIN
++#    define HV_REPORT_MAX INT8_MAX
++typedef int16_t hv_clamp_range_t;
++#endif
++
+ void           pointing_device_init(void);
+ bool           pointing_device_task(void);
+ bool           pointing_device_send(void);
+diff --git a/tmk_core/protocol/report.h b/tmk_core/protocol/report.h
+index 0e4f6e9..37c8ea4 100644
+--- a/tmk_core/protocol/report.h
++++ b/tmk_core/protocol/report.h
+@@ -199,6 +199,12 @@ typedef int16_t mouse_xy_report_t;
+ typedef int8_t mouse_xy_report_t;
+ #endif
+ 
++#ifdef WHEEL_EXTENDED_REPORT
++typedef int16_t mouse_hv_report_t;
++#else
++typedef int8_t mouse_hv_report_t;
++#endif
++
+ typedef struct {
+ #ifdef MOUSE_SHARED_EP
+     uint8_t report_id;
+@@ -210,8 +216,8 @@ typedef struct {
+ #endif
+     mouse_xy_report_t x;
+     mouse_xy_report_t y;
+-    int8_t            v;
+-    int8_t            h;
++    mouse_hv_report_t v;
++    mouse_hv_report_t h;
+ } PACKED report_mouse_t;
+ 
+ typedef struct {
+diff --git a/tmk_core/protocol/usb_descriptor.c b/tmk_core/protocol/usb_descriptor.c
+index 06835e6..03d5563 100644
+--- a/tmk_core/protocol/usb_descriptor.c
++++ b/tmk_core/protocol/usb_descriptor.c
+@@ -172,12 +172,19 @@ const USB_Descriptor_HIDReport_Datatype_t PROGMEM SharedReport[] = {
+                 HID_RI_PHYSICAL_MINIMUM(8, 0),
+                 HID_RI_PHYSICAL_MAXIMUM(8, 0),
+ #    endif
+-            // Vertical wheel (1 byte)
++            // Vertical wheel (1 or 2 bytes)
+             HID_RI_USAGE(8, 0x38),         // Wheel
++#    ifndef WHEEL_EXTENDED_REPORT
+             HID_RI_LOGICAL_MINIMUM(8, -127),
+             HID_RI_LOGICAL_MAXIMUM(8, 127),
+             HID_RI_REPORT_COUNT(8, 0x01),
+             HID_RI_REPORT_SIZE(8, 0x08),
++#    else
++            HID_RI_LOGICAL_MINIMUM(16, -32767),
++            HID_RI_LOGICAL_MAXIMUM(16,  32767),
++            HID_RI_REPORT_COUNT(8, 0x01),
++            HID_RI_REPORT_SIZE(8, 0x10),
++#    endif
+             HID_RI_INPUT(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_RELATIVE),
+ #    ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
+             HID_RI_END_COLLECTION(0),
+@@ -196,13 +203,20 @@ const USB_Descriptor_HIDReport_Datatype_t PROGMEM SharedReport[] = {
+                 HID_RI_REPORT_SIZE(8, 0x04),
+                 HID_RI_FEATURE(8, HID_IOF_CONSTANT),
+ #    endif
+-            // Horizontal wheel (1 byte)
++            // Horizontal wheel (1 or 2 bytes)
+             HID_RI_USAGE_PAGE(8, 0x0C),    // Consumer
+             HID_RI_USAGE(16, 0x0238),      // AC Pan
++#    ifndef WHEEL_EXTENDED_REPORT
+             HID_RI_LOGICAL_MINIMUM(8, -127),
+             HID_RI_LOGICAL_MAXIMUM(8, 127),
+             HID_RI_REPORT_COUNT(8, 0x01),
+             HID_RI_REPORT_SIZE(8, 0x08),
++#    else
++            HID_RI_LOGICAL_MINIMUM(16, -32767),
++            HID_RI_LOGICAL_MAXIMUM(16,  32767),
++            HID_RI_REPORT_COUNT(8, 0x01),
++            HID_RI_REPORT_SIZE(8, 0x10),
++#    endif
+             HID_RI_INPUT(8, HID_IOF_DATA | HID_IOF_VARIABLE | HID_IOF_RELATIVE),
+ #    ifdef MOUSE_WHEEL_RESOLUTION_MULTIPLIER
+             HID_RI_END_COLLECTION(0),

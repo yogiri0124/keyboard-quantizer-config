@@ -21,6 +21,8 @@
 #include "switcher.h"
 #include "wheel.h"
 
+_Static_assert(sizeof(((report_mouse_t *)0)->v) == sizeof(scroll_count_t), "scroll_out matches the report's wheel field");
+
 static bool    send_wanted;
 static uint8_t sent_buttons;
 static int32_t pending_x;
@@ -69,7 +71,7 @@ static bool send_report(void) {
     r.buttons        = current_buttons();
     r.x              = take_axis(&pending_x);
     r.y              = take_axis(&pending_y);
-    scroll_out_take(&r.v, &r.h);
+    scroll_out_take(timer_read(), &r.v, &r.h);
     send_wanted  = pending_x != 0 || pending_y != 0 || scroll_out_pending();
     bool changed = r.buttons != sent_buttons || r.x != 0 || r.y != 0 || r.v != 0 || r.h != 0;
     if (changed) {

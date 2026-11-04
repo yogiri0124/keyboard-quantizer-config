@@ -5,6 +5,11 @@ TAP_DANCE_ENABLE = yes
 COMBO_ENABLE = yes
 QMK_SETTINGS = yes
 
+# 16-bit wheel fields (patches/0006, scroll_out.h). Set here rather than in
+# config.h: it changes nothing stored, and OPT_DEFS lines stay out of the
+# build id, so the saved configuration is kept.
+OPT_DEFS += -DWHEEL_EXTENDED_REPORT
+
 # Board side (mini/): USB host queue, input -> matrix, TinyUSB callbacks.
 SRC += hid_queue.c hid_scan.c hid_input.c hid_host.c
 

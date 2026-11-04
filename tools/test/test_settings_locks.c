@@ -315,13 +315,20 @@ static void test_mouse_report(void) {
     pointing_device_task();
     CHECK_EQ(sent[4].buttons, 0);
 
-    /* Scroll output goes out with the report, a report's worth at a time. */
+    /* Scroll output goes out with the report: all of it in one 16-bit
+     * report, then nothing more until the interval is up. */
     n_sent = 0;
     scroll_out_detents(2, true, false);
     mouse_request_send();
     pointing_device_task();
+    CHECK(n_sent == 1 && sent[0].v == 240, "scroll %d sends %d", sent[0].v, n_sent);
+    scroll_out_detents(1, true, false);
+    mouse_request_send();
     pointing_device_task();
-    CHECK(n_sent == 2 && sent[0].v == 127 && sent[1].v == 113, "scroll %d %d", sent[0].v, sent[1].v);
+    CHECK_EQ(n_sent, 1);
+    now += SCROLL_OUT_INTERVAL_MS;
+    pointing_device_task();
+    CHECK(n_sent == 2 && sent[1].v == 120, "paced scroll %d sends %d", sent[1].v, n_sent);
 
     room = 1;
     CHECK(!mouse_can_tap(), "tap with one free slot");

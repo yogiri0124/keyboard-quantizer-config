@@ -9,6 +9,11 @@ typedef struct {
     uint8_t buttons;
     int16_t x;
     int16_t y;
-    int8_t  v;
-    int8_t  h;
+#ifdef WHEEL_EXTENDED_REPORT
+    int16_t v;
+    int16_t h;
+#else
+    int8_t v;
+    int8_t h;
+#endif
 } report_mouse_t;

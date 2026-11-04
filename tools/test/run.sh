@@ -30,17 +30,20 @@ run queue "$root/tools/test/test_queue.c" "$kq/mini/hid_queue.c" "$kq/mini/hid_s
 
 run input "$root/tools/test/test_input.c" "$kq/mini/hid_input.c" "$kq/mini/hid_queue.c" "$kq/mini/hid_scan.c" "$kq/parser/hid_desc.c" "$kq/parser/hid_report.c"
 
-run mouse_core -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 "$root/tools/test/test_mouse_core.c" "$vial/modes.c" "$vial/pointer.c" "$vial/gesture.c" "$vial/scroll_out.c"
+run mouse_core -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 -DWHEEL_EXTENDED_REPORT "$root/tools/test/test_mouse_core.c" "$vial/modes.c" "$vial/pointer.c" "$vial/gesture.c" "$vial/scroll_out.c"
+
+# The same with 8-bit wheel fields: a report holds +-127 counts.
+run mouse_core_8bit -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 "$root/tools/test/test_mouse_core.c" "$vial/modes.c" "$vial/pointer.c" "$vial/gesture.c" "$vial/scroll_out.c"
 
 run macro -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' "$root/tools/test/test_macro.c" "$vial/macro.c"
 
 run mouse_keys -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DVIAL_ENABLE -DTAP_DANCE_ENABLE "$root/tools/test/test_mouse_keys.c" "$vial/mouse_keys.c" "$vial/modes.c" "$vial/switcher.c"
 
-run settings_locks -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DMOUSEKEY_ENABLE -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 "$root/tools/test/test_settings_locks.c" "$vial/settings.c" "$vial/locks.c" "$vial/mouse.c" "$vial/modes.c" "$vial/scroll_out.c" "$vial/switcher.c"
+run settings_locks -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DMOUSEKEY_ENABLE -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 -DWHEEL_EXTENDED_REPORT "$root/tools/test/test_settings_locks.c" "$vial/settings.c" "$vial/locks.c" "$vial/mouse.c" "$vial/modes.c" "$vial/scroll_out.c" "$vial/switcher.c"
 
 run host -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' "$root/tools/test/test_host.c" "$kq/mini/hid_host.c" "$kq/mini/hid_queue.c" "$kq/mini/hid_scan.c"
 
-run ball_wheel -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DMOUSEKEY_ENABLE -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 "$root/tools/test/test_ball_wheel.c" "$vial/ball.c" "$vial/wheel.c" "$vial/gesture.c" "$vial/pointer.c" "$vial/scroll_out.c" "$vial/modes.c"
+run ball_wheel -I"$root/tools/test/stubs" -DQMK_KEYBOARD_H='"qmk_stub.h"' -DMOUSEKEY_ENABLE -DMOUSE_WHEEL_RESOLUTION_MULTIPLIER=120 -DWHEEL_EXTENDED_REPORT "$root/tools/test/test_ball_wheel.c" "$vial/ball.c" "$vial/wheel.c" "$vial/gesture.c" "$vial/pointer.c" "$vial/scroll_out.c" "$vial/modes.c"
 
 ${PYTHON:-python3} -B "$root/tools/test/test_hid_descriptors.py"
 ${PYTHON:-python3} -B "$root/tools/test/test_vil_to_c.py"
